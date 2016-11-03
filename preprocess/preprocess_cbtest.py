@@ -22,7 +22,7 @@ splits = ('train', 'valid', 'test')
 ofps = {}
 for s in splits:
     ofps[s] = open(os.path.join(args.cbtest_dir,
-                                'preprocess/cbt_{}.jsonl'.format(s)), 'w')
+                                'preprocess/{}.jsonl'.format(s)), 'w')
 
 book = None
 w_count = {
