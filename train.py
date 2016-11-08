@@ -65,7 +65,7 @@ with tf.Session() as sess:
     initializer = tf.random_uniform_initializer(-init_scale, init_scale)
     with tf.variable_scope('model', reuse=None, initializer=initializer):
         model = lm.LM(lm.ModelOption())
-        train_op = lm.train_op(model, model.opt)
+        train_op, lr_var = lm.train_op(model, model.opt)
     with tf.variable_scope('model', reuse=True, initializer=initializer):
         vmodel = lm.LM(lm.ModelOption(is_training=False))
 

@@ -28,17 +28,15 @@ def sharded_variable(name, shape, num_shards,
             for i in range(num_shards)]
 
 def train_op(model, opt):
-    if opt.is_training:
-        global_step = tf.get_variable("global_step", [], tf.int32,
-                                      initializer=tf.zeros_initializer,
-                                      trainable=False)
-        optimizer = tf.train.GradientDescentOptimizer(opt.learning_rate)
-        train_op = optimizer.apply_gradients(
-            zip(model.grads, model.vars),
-            global_step=global_step)
-        return train_op
-    else:
-        return tf.no_op()
+    lr = tf.Variable(opt.learning_rate, trainable=False)
+    global_step = tf.get_variable("global_step", [], tf.int32,
+                                  initializer=tf.zeros_initializer,
+                                  trainable=False)
+    optimizer = tf.train.GradientDescentOptimizer(lr)
+    train_op = optimizer.apply_gradients(
+        zip(model.grads, model.vars),
+        global_step=global_step)
+    return train_op, lr
 
 class LM(object):
 
@@ -85,7 +83,8 @@ class LM(object):
         softmax_w = sharded_variable(
             "softmax_w", [opt.vocab_size, opt.state_size], opt.num_shards)
         softmax_b = tf.get_variable("softmax_b", [opt.vocab_size])
-        if opt.num_softmax_sampled == 0:
+        if opt.num_softmax_sampled == 0 or not opt.is_training:
+            # only sample when training
             full_softmax_w = tf.reshape(
                 tf.concat(1, softmax_w), [-1, opt.state_size])
             full_softmax_w = full_softmax_w[:opt.vocab_size, :]
