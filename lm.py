@@ -73,6 +73,7 @@ class LM(object):
             outputs, state = tf.nn.rnn(
                 cell_stack, inputs, initial_state=self.initial_state)
         outputs = tf.reshape(tf.concat(1, outputs), [-1, opt.state_size])
+        self.final_state = state
         # Output
         # XXX: why is softmax_w transposed?
         softmax_w = sharded_variable(
@@ -132,14 +133,14 @@ class ModelOption(object):
     def _default_options(self):
         self.__dict__.update(
             is_training=True,
-            batch_size=8,
+            batch_size=64,
             num_steps=10,
-            num_shards=8,
+            num_shards=1,
             num_layers=1,
             learning_rate=0.8,
             max_grad_norm=10.0,
             emb_keep_prob=0.9,
-            keep_prob=0.9,
+            keep_prob=0.75,
             vocab_size=10001,
             emb_size=100,
             state_size=100,

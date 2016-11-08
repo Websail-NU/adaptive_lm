@@ -67,6 +67,15 @@ class Vocabulary(object):
     def i2w(self, index):
         return self._i2w[index]
 
+    def iarr2warr(self, iarr):
+        w = []
+        for ir in iarr:
+            iw = []
+            w.append(iw)
+            for i in ir:
+                iw.append(self.i2w(i))
+        return w
+
     def finalize(self):
         self._sos_id = self.w2i(self.sos)
         self._eos_id = self.w2i(self.eos)
