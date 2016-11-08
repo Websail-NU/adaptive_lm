@@ -25,7 +25,7 @@ logger = common_utils.get_logger()
 logger.setLevel(logging.DEBUG)
 
 
-def run_epoch(sess, m, data_iter):
+def run_epoch(sess, m, data_iter, train_op=tf.no_op()):
     """ train the model on the given data. """
     start_time = time.time()
     costs = 0.0
@@ -35,7 +35,7 @@ def run_epoch(sess, m, data_iter):
         state.append((c.eval(), h.eval()))
     for step, (x, y, w, l) in enumerate(data_iter.iterate_epoch(
         m.opt.batch_size, m.opt.num_steps)):
-        fetches = [m.loss, m.train_op]
+        fetches = [m.loss, train_op]
         for c, h in m.final_state:
             fetches.append(c)
             fetches.append(h)
@@ -65,6 +65,7 @@ with tf.Session() as sess:
     initializer = tf.random_uniform_initializer(-init_scale, init_scale)
     with tf.variable_scope('model', reuse=None, initializer=initializer):
         model = lm.LM(lm.ModelOption())
+        train_op = lm.train_op(model, model.opt)
     with tf.variable_scope('model', reuse=True, initializer=initializer):
         vmodel = lm.LM(lm.ModelOption(is_training=False))
 
@@ -73,7 +74,7 @@ with tf.Session() as sess:
         logger.debug("- {} {} {}".format(v.name, v.get_shape(), v.device))
     logger.info('Initializing vairables...')
     sess.run(tf.initialize_all_variables())
-    train_ppl = run_epoch(sess, model, train_iter)
+    train_ppl = run_epoch(sess, model, train_iter, train_op)
     valid_ppl = run_epoch(sess, vmodel, valid_iter)
     print(train_ppl)
     print(valid_ppl)

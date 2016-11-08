@@ -1,6 +1,10 @@
 import tensorflow as tf
 """ Recurrent langauge models. This code is adapted from:
 `Rafal Jozefowicz's lm <https://github.com/rafaljozefowicz/lm>`_
+
+Todo:
+    - Choosing optimizer from options
+    - Dynamic learning rate
 """
 
 # \[T]/ PRAISE THE SUN!
@@ -23,6 +27,19 @@ def sharded_variable(name, shape, num_shards,
                             dtype=dtype)
             for i in range(num_shards)]
 
+def train_op(model, opt):
+    if opt.is_training:
+        global_step = tf.get_variable("global_step", [], tf.int32,
+                                      initializer=tf.zeros_initializer,
+                                      trainable=False)
+        optimizer = tf.train.GradientDescentOptimizer(opt.learning_rate)
+        train_op = optimizer.apply_gradients(
+            zip(model.grads, model.vars),
+            global_step=global_step)
+        return train_op
+    else:
+        return tf.no_op()
+
 class LM(object):
 
     def __init__(self, opt):
@@ -36,17 +53,6 @@ class LM(object):
             self.loss = self._forward(self.x, self.y, self.w)
             if opt.is_training:
                 self.grads, self.vars = self._backward(self.loss)
-
-        if opt.is_training:
-            self.global_step = tf.get_variable("global_step", [], tf.int32,
-                                               initializer=tf.zeros_initializer,
-                                               trainable=False)
-            optimizer = tf.train.GradientDescentOptimizer(opt.learning_rate)
-            self.train_op = optimizer.apply_gradients(
-                zip(self.grads, self.vars),
-                global_step=self.global_step)
-        else:
-            self.train_op = tf.no_op()
 
 
     def _forward(self, x, y, w):
@@ -133,7 +139,7 @@ class ModelOption(object):
     def _default_options(self):
         self.__dict__.update(
             is_training=True,
-            batch_size=64,
+            batch_size=32,
             num_steps=10,
             num_shards=1,
             num_layers=1,
