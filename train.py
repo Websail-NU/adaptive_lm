@@ -48,8 +48,8 @@ def run_epoch(sess, m, data_iter, train_op=tf.no_op()):
         state = [state_flat[i:i+2] for i in range(0, len(state_flat), 2)]
         costs += cost
         num_words += np.sum(w)
-        if m.opt.is_training and step % 1000 == 0:
-            logger.info("{} perplexity: {} wps: {}".format(
+        if m.opt.is_training and (step + 1) % 1000 == 0:
+            logger.info("-- @{} perplexity: {} wps: {}".format(
                     step, np.exp(costs / (step+1)),
                     num_words / (time.time() - start_time)))
     return np.exp(costs / (step+1))
@@ -72,9 +72,16 @@ with tf.Session() as sess:
     logger.debug('Trainable variables:')
     for v in tf.trainable_variables():
         logger.debug("- {} {} {}".format(v.name, v.get_shape(), v.device))
+
     logger.info('Initializing vairables...')
     sess.run(tf.initialize_all_variables())
-    train_ppl = run_epoch(sess, model, train_iter, train_op)
-    valid_ppl = run_epoch(sess, vmodel, valid_iter)
-    print(train_ppl)
-    print(valid_ppl)
+
+    for epoch in range(5):
+        logger.info("========= Start epoch {} =========".format(epoch+1))
+        logger.info("- Learning rate = {}".format(sess.run(lr_var)))
+        logger.info('- Training:')
+        train_ppl = run_epoch(sess, model, train_iter, train_op)
+        logger.info('- Validating:')
+        valid_ppl = run_epoch(sess, vmodel, valid_iter)
+        logger.info('- Train ppl = {}, Valid ppl = {}'.format(
+            train_ppl, valid_ppl))
