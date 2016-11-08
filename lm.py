@@ -35,7 +35,7 @@ class LM(object):
         with tf.variable_scope(tf.get_variable_scope()):
             self.loss = self._forward(self.x, self.y, self.w)
             if opt.is_training:
-                self.grads, self.vars = self._backward(loss)
+                self.grads, self.vars = self._backward(self.loss)
 
         if opt.is_training:
             self.global_step = tf.get_variable("global_step", [], tf.int32,
