@@ -79,6 +79,7 @@ def SUN_BRO():
 def get_initial_training_state():
     return Bunch(
         epoch = -1,
+        val_ppl = float('inf'),
         best_val_ppl = float('inf'),
         learning_rate = 0,
         best_epoch = -1,
@@ -134,6 +135,8 @@ def get_common_argparse():
     parser.add_argument('--max_grad_norm', type=float, default=10.,
                         help='clip global grad norm')
     parser.add_argument('--learning_rate', type=float, default=0.8,
+                        help='initial learning rate')
+    parser.add_argument('--min_learning_rate', type=float, default=0.01,
                         help='initial learning rate')
     parser.add_argument('--lr_decay_every', type=int, default=-1,
                         help='number of epochs before learning rate is decayed')

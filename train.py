@@ -5,8 +5,7 @@ This module creates and trains recurrent neural network language model.
 Example:
 
 Todo:
-    * Implement learning rate decay
-    * Implement ealry stop
+    * Support resume training
 
 """
 
@@ -22,6 +21,43 @@ import numpy as np
 import lm
 import common_utils
 import data_utils
+
+def update_lr(opt, state):
+    logger.info('--------- Update learning rate ---------')
+    old_lr = state.learning_rate
+    new_lr = old_lr
+    if opt.lr_decay_every > 0 and state.epoch % opt.lr_decay_every == 0:
+        new_lr = old_lr * opt.lr_decay_factor
+        logger.info('- Scheduled learning rate decay')
+    elif opt.lr_decay_imp > 0:
+        if state.val_ppl / state.last_imp_val_ppl < opt.lr_decay_imp:
+            logger.info('- Significant improvement found')
+            logger.info('-- epoch: {} -> {}'.format(
+                state.last_imp_epoch + 1, state.epoch + 1))
+            state.last_imp_epoch = state.epoch
+            state.last_imp_val_ppl = state.val_ppl
+            state.imp_wait = 0
+        else:
+            state.imp_wait = state.imp_wait + 1
+            logger.info('- No significant improvement found')
+            logger.info('-- last improved since epoch: {}'.format(
+                state.last_imp_epoch + 1))
+            logger.info('-- waiting for {}/{} epochs'.format(
+                state.imp_wait, opt.lr_decay_wait))
+            if state.imp_wait >= opt.lr_decay_wait:
+                new_lr = old_lr * opt.lr_decay_factor
+                state.imp_wait = 0
+                if opt.lr_decay_factor == 1.0:
+                    logger.info('- Learning rate is constant!')
+                    return True
+                logger.info('-- decay learning rate')
+    logger.info('- Learning rate: {} -> {}'.format(old_lr, new_lr))
+    state.learning_rate = new_lr
+    if new_lr < opt.min_learning_rate:
+        logger.info('- Learning rate reaches mininum ({})!'.format(
+            opt.min_learning_rate))
+        return True
+    return False
 
 def run_epoch(sess, m, data_iter, opt, train_op=tf.no_op()):
     """ train the model on the given data. """
@@ -100,7 +136,8 @@ def main(opt):
             valid_ppl, vsteps = run_epoch(sess, vmodel, valid_iter, opt)
             logger.info('- Train ppl = {}, Valid ppl = {}'.format(
                 train_ppl, valid_ppl))
-            logger.info('========= End of epoch {} report ========='.format(
+            state.val_ppl = valid_ppl
+            logger.info('--------- End of epoch {} ---------'.format(
                 epoch + 1))
             if valid_ppl < state.best_val_ppl:
                 logger.info('- Best PPL: {} -> {}'.format(
@@ -109,15 +146,24 @@ def main(opt):
                     state.best_epoch + 1, epoch + 1))
                 state.best_val_ppl = valid_ppl
                 state.best_epoch = epoch
-                checkpoint_path = os.path.join(opt.output_dir,
-                                               "best_model.ckpt")
-                logger.info('- Saving model to {}'.format(checkpoint_path))
-                save_path = saver.save(sess, checkpoint_path)
-                with open(os.path.join(opt.output_dir,
-                                       "best_state.json"), 'w') as ofp:
+                ckpt_path = os.path.join(opt.output_dir, "best_model.ckpt")
+                state_path = os.path.join(opt.output_dir, "best_state.json")
+                logger.info('- Saving best model to {}'.format(ckpt_path))
+                saver.save(sess, ckpt_path)
+                with open(state_path, 'w') as ofp:
                     json.dump(vars(state), ofp)
             else:
                 logger.info('- No improvement!')
+            done_training = update_lr(opt, state)
+            ckpt_path = os.path.join(opt.output_dir, "latest_model.ckpt")
+            state_path = os.path.join(opt.output_dir, "latest_state.json")
+            logger.info('- Saving model to {}'.format(ckpt_path))
+            saver.save(sess, ckpt_path)
+            with open(state_path, 'w') as ofp:
+                json.dump(vars(state), ofp)
+            if done_training:
+                break
+        logger.info('Done training at epoch {}'.format(state.epoch))
 
 if __name__ == "__main__":
     parser = common_utils.get_common_argparse()
