@@ -4,7 +4,7 @@ import tensorflow as tf
 
 Todo:
     - Choosing optimizer from options
-    - Dynamic learning rate
+    - Support other types of cells
 """
 
 # \[T]/ PRAISE THE SUN!
@@ -40,7 +40,8 @@ def train_op(model, opt):
 
 class LM(object):
 
-    def __init__(self, opt):
+    def __init__(self, opt, is_training=True):
+        self.is_training = is_training
         self.opt = opt
         self.x = tf.placeholder(tf.int32, [opt.batch_size, opt.num_steps])
         self.y = tf.placeholder(tf.int32, [opt.batch_size, opt.num_steps])
@@ -49,7 +50,7 @@ class LM(object):
         # variable scope name must be set before creating LM
         with tf.variable_scope(tf.get_variable_scope()):
             self.loss = self._forward(self.x, self.y, self.w)
-            if opt.is_training:
+            if self.is_training:
                 self.grads, self.vars = self._backward(self.loss)
 
 
@@ -60,14 +61,15 @@ class LM(object):
         emb_vars = sharded_variable(
             "emb", [opt.vocab_size, opt.emb_size], opt.num_shards)
         x = tf.nn.embedding_lookup(emb_vars, x)  # [bs, steps, emb_size]
-        if opt.is_training and opt.emb_keep_prob < 1.0:
+        if self.is_training and opt.emb_keep_prob < 1.0:
             x = tf.nn.dropout(x, opt.emb_keep_prob)
         inputs = [tf.squeeze(_x, [1])
                   for _x in tf.split(1, opt.num_steps, x)] # steps * [bs, emb_size]
         # RNN
         with tf.variable_scope("rnn") as vs:
+            # XXX: Support other types of cells
             cell = tf.nn.rnn_cell.BasicLSTMCell(opt.state_size)
-            if opt.is_training and opt.keep_prob < 1.0:
+            if self.is_training and opt.keep_prob < 1.0:
                 cell = tf.nn.rnn_cell.DropoutWrapper(
                     cell, output_keep_prob=opt.keep_prob)
             cell_stack = tf.nn.rnn_cell.MultiRNNCell(
@@ -83,7 +85,7 @@ class LM(object):
         softmax_w = sharded_variable(
             "softmax_w", [opt.vocab_size, opt.state_size], opt.num_shards)
         softmax_b = tf.get_variable("softmax_b", [opt.vocab_size])
-        if opt.num_softmax_sampled == 0 or not opt.is_training:
+        if opt.num_softmax_sampled == 0 or not self.is_training:
             # only sample when training
             full_softmax_w = tf.reshape(
                 tf.concat(1, softmax_w), [-1, opt.state_size])
@@ -126,29 +128,3 @@ class LM(object):
         clipped_grads = emb_grads + rnn_grads + softmax_grads
         assert len(clipped_grads) == len(orig_grads)
         return clipped_grads, all_vars
-
-class ModelOption(object):
-    def __init__(self, **kwds):
-        self._default_options()
-        self.__dict__.update(kwds)
-
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
-
-    def _default_options(self):
-        self.__dict__.update(
-            is_training=True,
-            batch_size=32,
-            num_steps=10,
-            num_shards=1,
-            num_layers=1,
-            learning_rate=0.8,
-            max_grad_norm=10.0,
-            emb_keep_prob=0.9,
-            keep_prob=0.75,
-            vocab_size=10001,
-            emb_size=100,
-            state_size=100,
-            num_softmax_sampled=0,
-            run_profiler=False,
-        )

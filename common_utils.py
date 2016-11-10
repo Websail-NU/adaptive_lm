@@ -6,6 +6,53 @@ Todo:
 """
 
 import logging
+import argparse
+
+class Bunch(object):
+    def __init__(self, **kwds):
+        self.__dict__.update(kwds)
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def update_from_dict(self, d):
+        self.__dict__.update(d)
+
+    def update_from_ns(self, ns):
+        """Works with argparse"""
+        self.update_from_dict(vars(ns))
+
+    def __str__(self):
+        return str(self.__dict__)
+
+    def __repr__(self):
+        keys = self.__dict__.keys()
+        keys = sorted(keys)
+        o = []
+        for k in keys:
+            o.append("- {}:\t{}".format(k, self.__dict__[k]))
+        return '\n'.join(o)
+
+    @staticmethod
+    def default_model_options():
+        opt = Bunch()
+        opt.__dict__.update(
+            batch_size=32,
+            num_steps=10,
+            num_shards=1,
+            num_layers=1,
+            learning_rate=0.8,
+            max_grad_norm=10.0,
+            emb_keep_prob=0.9,
+            keep_prob=0.75,
+            vocab_size=10001,
+            emb_size=100,
+            state_size=100,
+            num_softmax_sampled=0,
+            run_profiler=False,
+        )
+        return opt
+
 
 def get_logger(log_file_path=None):
     root_logger = logging.getLogger()
@@ -25,3 +72,90 @@ def get_logger(log_file_path=None):
     console_handler.setFormatter(log_formatter)
     root_logger.addHandler(console_handler)
     return root_logger
+
+def SUN_BRO():
+    return '\[T]/ PRAISE THE SUN!\n |_|\n | |'
+
+def get_initial_training_state():
+    return Bunch(
+        epoch = -1,
+        best_val_ppl = float('inf'),
+        learning_rate = 0,
+        best_epoch = -1,
+        last_imp_val_ppl = float('inf'),
+        last_imp_epoch = -1,
+        imp_wait = 0
+    )
+
+
+def get_common_argparse():
+    parser = argparse.ArgumentParser()
+    # Data and vocabulary file
+    parser.add_argument('--data_dir', type=str,
+                        default='data/ptb/preprocess',
+                        help='data directory')
+    parser.add_argument('--train_file', type=str,
+                        default='train.jsonl',
+                        help='train data file')
+    parser.add_argument('--valid_file', type=str,
+                        default='valid.jsonl',
+                        help='valid data file')
+    parser.add_argument('--test_file', type=str,
+                        default='test.jsonl',
+                        help='test data file')
+    parser.add_argument('--vocab_file', type=str,
+                        default='vocab.txt',
+                        help='vocab file')
+    # Parameters to configure the neural network.
+    parser.add_argument('--state_size', type=int, default=100,
+                        help='size of RNN hidden state vector')
+    parser.add_argument('--emb_size', type=int, default=100,
+                        help='size of character embeddings')
+    parser.add_argument('--num_layers', type=int, default=1,
+                        help='number of layers in the RNN')
+    parser.add_argument('--num_steps', type=int, default=10,
+                        help='number of unrolling steps.')
+    parser.add_argument('--init_scale', type=float, default=0.1,
+                        help='initialized value for model params')
+    # parser.add_argument('--model', type=str, default='lstm',
+    #                     help='which model to use (rnn, lstm or gru).')
+
+    # Parameters to control the training.
+    parser.add_argument('--max_epochs', type=int, default=50,
+                        help='number of maxinum epochs')
+    parser.add_argument('--batch_size', type=int, default=32,
+                        help='minibatch size')
+    parser.add_argument('--emb_keep_prob', type=float, default=0.9,
+                        help='(1 - dropout probability) of the embedding')
+    parser.add_argument('--keep_prob', type=float, default=0.75,
+                        help=('(1 - dropout probability)'
+                              'of other part of the model'))
+    # Parameters for gradient descent.
+    parser.add_argument('--max_grad_norm', type=float, default=10.,
+                        help='clip global grad norm')
+    parser.add_argument('--learning_rate', type=float, default=0.8,
+                        help='initial learning rate')
+    parser.add_argument('--lr_decay_every', type=int, default=-1,
+                        help='number of epochs before learning rate is decayed')
+    parser.add_argument('--lr_decay_imp', type=float, default=0.96,
+                        help=('improvement ratio between val losses before'
+                              'decaying learning rate'))
+    parser.add_argument('--lr_decay_wait', type=int, default=2,
+                        help=('number of non-improving epochs to wait'
+                              'before decaying learning rate'))
+    parser.add_argument('--lr_decay_factor', type=float, default=0.8,
+                        help=('factor by which learning rate'
+                              'is decayed (lr = lr * factor)'))
+    # Parameters for outputs and reporting.
+    parser.add_argument('--output_dir', type=str, default='data/ptb/output',
+                        help=('directory to store final and'
+                              ' intermediate results and models.'))
+    parser.add_argument('--log_file_path', type=str, default=None,
+                        help='log file')
+    parser.add_argument('--debug', dest='debug', action='store_true',
+                        help='display debug information')
+    parser.set_defaults(debug=False)
+    parser.add_argument('--progress_steps', type=int,
+                        default=1000,
+                        help='frequency for progress report in training')
+    return parser
