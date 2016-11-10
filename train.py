@@ -22,6 +22,16 @@ import lm
 import common_utils
 import data_utils
 
+def resume_if_possible(opt, sess, saver, state):
+    ckpt_path = os.path.join(opt.output_dir, "latest_model.ckpt")
+    state_path = os.path.join(opt.output_dir, "latest_state.json")
+    if os.path.exists(ckpt_path) and os.path.exists(state_path):
+        logger.info('Found existing checkpoint, resume training')
+        with open(state) as ifp:
+            state.update_from_dict(json.load(ifp))
+        saver.restore(sess, ckpt_path)
+        logger.info('\n{}'.format(state.__repr__()))
+
 def update_lr(opt, state):
     logger.info('--------- Update learning rate ---------')
     old_lr = state.learning_rate
@@ -121,10 +131,10 @@ def main(opt):
         logger.info('Initializing vairables...')
         sess.run(tf.initialize_all_variables())
         saver = tf.train.Saver()
-        logger.info('Start training loop:')
-        logger.debug('\n' + common_utils.SUN_BRO())
         state = common_utils.get_initial_training_state()
         state.learning_rate = opt.learning_rate
+        logger.info('Start training loop:')
+        logger.debug('\n' + common_utils.SUN_BRO())
         for epoch in range(opt.max_epochs):
             state.epoch = epoch
             logger.info("========= Start epoch {} =========".format(epoch+1))
