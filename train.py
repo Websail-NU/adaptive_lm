@@ -5,7 +5,8 @@ This module creates and trains recurrent neural network language model.
 Example:
 
 Todo:
-    * Support resume training
+    - Support other optimization method
+    - Support TensorBoard
 
 """
 
@@ -25,12 +26,17 @@ import data_utils
 def resume_if_possible(opt, sess, saver, state):
     ckpt_path = os.path.join(opt.output_dir, "latest_model.ckpt")
     state_path = os.path.join(opt.output_dir, "latest_state.json")
+    logger.debug('Looking for checkpoint at {}'.format(ckpt_path))
+    logger.debug('Looking for state at {}'.format(state_path))
     if os.path.exists(ckpt_path) and os.path.exists(state_path):
         logger.info('Found existing checkpoint, resume training')
-        with open(state) as ifp:
+        with open(state_path) as ifp:
+            logger.debug('- Loading state...')
             state.update_from_dict(json.load(ifp))
+        logger.debug('- Restoring model variables...')
         saver.restore(sess, ckpt_path)
-        logger.info('\n{}'.format(state.__repr__()))
+        logger.info('Resumed state:\n{}'.format(state.__repr__()))
+    return state
 
 def update_lr(opt, state):
     logger.info('--------- Update learning rate ---------')
@@ -133,13 +139,20 @@ def main(opt):
         saver = tf.train.Saver()
         state = common_utils.get_initial_training_state()
         state.learning_rate = opt.learning_rate
+        state = resume_if_possible(opt, sess, saver, state)
         logger.info('Start training loop:')
         logger.debug('\n' + common_utils.SUN_BRO())
-        for epoch in range(opt.max_epochs):
+        writer = tf.train.SummaryWriter("tf.log", sess.graph)
+        writer.close()
+        return
+        for epoch in range(state.epoch, opt.max_epochs):
+            epoch_time = time.time()
             state.epoch = epoch
             logger.info("========= Start epoch {} =========".format(epoch+1))
             sess.run(tf.assign(lr_var, state.learning_rate))
             logger.info("- Learning rate = {}".format(state.learning_rate))
+            logger.debug("- Leanring rate (variable) = {}".format(
+                sess.run(lr_var)))
             logger.info('- Training:')
             train_ppl, steps = run_epoch(sess, model, train_iter, opt, train_op)
             logger.info('- Validating:')
@@ -147,8 +160,6 @@ def main(opt):
             logger.info('- Train ppl = {}, Valid ppl = {}'.format(
                 train_ppl, valid_ppl))
             state.val_ppl = valid_ppl
-            logger.info('--------- End of epoch {} ---------'.format(
-                epoch + 1))
             if valid_ppl < state.best_val_ppl:
                 logger.info('- Best PPL: {} -> {}'.format(
                     state.best_val_ppl, valid_ppl))
@@ -167,15 +178,20 @@ def main(opt):
             done_training = update_lr(opt, state)
             ckpt_path = os.path.join(opt.output_dir, "latest_model.ckpt")
             state_path = os.path.join(opt.output_dir, "latest_state.json")
+            logger.info('--------- End of epoch {} ---------'.format(
+                epoch + 1))
             logger.info('- Saving model to {}'.format(ckpt_path))
+            logger.info('- Epoch time: {}s'.format(time.time() - epoch_time))
             saver.save(sess, ckpt_path)
             with open(state_path, 'w') as ofp:
                 json.dump(vars(state), ofp)
             if done_training:
                 break
-        logger.info('Done training at epoch {}'.format(state.epoch))
+            logger.debug('Updated state:\n{}'.format(state.__repr__()))
+        logger.info('Done training at epoch {}'.format(state.epoch + 1))
 
 if __name__ == "__main__":
+    global_time = time.time()
     parser = common_utils.get_common_argparse()
     args = parser.parse_args()
     opt = common_utils.Bunch.default_model_options()
@@ -187,3 +203,4 @@ if __name__ == "__main__":
         logger.setLevel(logging.INFO)
     logger.info('Configurations:\n{}'.format(opt.__repr__()))
     main(opt)
+    logger.info('Total time: {}s'.format(time.time() - global_time))

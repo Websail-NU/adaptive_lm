@@ -7,6 +7,7 @@ Todo:
 
 import logging
 import argparse
+import collections
 
 class Bunch(object):
     def __init__(self, **kwds):
@@ -16,6 +17,7 @@ class Bunch(object):
         return self.__dict__ == other.__dict__
 
     def update_from_dict(self, d):
+        # print(unicode2string(d))
         self.__dict__.update(d)
 
     def update_from_ns(self, ns):
@@ -53,6 +55,15 @@ class Bunch(object):
         )
         return opt
 
+def unicode2string(data):
+    if isinstance(data, basestring):
+        return str(data)
+    elif isinstance(data, collections.Mapping):
+        return dict(map(unicode2string, data.iteritems()))
+    elif isinstance(data, collections.Iterable):
+        return type(data)(map(unicode2string, data))
+    else:
+        return data
 
 def get_logger(log_file_path=None):
     root_logger = logging.getLogger()
@@ -78,7 +89,7 @@ def SUN_BRO():
 
 def get_initial_training_state():
     return Bunch(
-        epoch = -1,
+        epoch = 0,
         val_ppl = float('inf'),
         best_val_ppl = float('inf'),
         learning_rate = 0,
