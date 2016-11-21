@@ -36,6 +36,8 @@ def resume_if_possible(opt, sess, saver, state):
         logger.debug('- Restoring model variables...')
         saver.restore(sess, ckpt_path)
         logger.info('Resumed state:\n{}'.format(state.__repr__()))
+    else:
+        logger.info('No state to resume...')
     return state
 
 def update_lr(opt, state):
@@ -83,13 +85,13 @@ def run_epoch(sess, m, data_iter, opt, train_op=tf.no_op()):
     state = []
     for c, h in m.initial_state:
         state.append((c.eval(), h.eval()))
-    for step, (x, y, w, l) in enumerate(data_iter.iterate_epoch(
+    for step, (x, y, w, l, seq_len) in enumerate(data_iter.iterate_epoch(
         m.opt.batch_size, m.opt.num_steps)):
         fetches = [m.loss, train_op]
         for c, h in m.final_state:
             fetches.append(c)
             fetches.append(h)
-        feed_dict = {m.x: x, m.y: y, m.w: w}
+        feed_dict = {m.x: x, m.y: y, m.w: w, m.seq_len: seq_len}
         for i, (c, h) in enumerate(m.initial_state):
             feed_dict[c], feed_dict[h] = state[i]
         res = sess.run(fetches, feed_dict)
@@ -142,9 +144,8 @@ def main(opt):
         state = resume_if_possible(opt, sess, saver, state)
         logger.info('Start training loop:')
         logger.debug('\n' + common_utils.SUN_BRO())
-        writer = tf.train.SummaryWriter("tf.log", sess.graph)
-        writer.close()
-        return
+        # writer = tf.train.SummaryWriter("tf.log", sess.graph)
+        # writer.close()
         for epoch in range(state.epoch, opt.max_epochs):
             epoch_time = time.time()
             state.epoch = epoch

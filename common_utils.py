@@ -43,6 +43,7 @@ class Bunch(object):
             num_steps=10,
             num_shards=1,
             num_layers=1,
+            varied_len=False,
             learning_rate=0.8,
             max_grad_norm=10.0,
             emb_keep_prob=0.9,
@@ -142,6 +143,12 @@ def get_common_argparse():
     parser.add_argument('--keep_prob', type=float, default=0.75,
                         help=('(1 - dropout probability)'
                               'of other part of the model'))
+    parser.add_argument('--varied_len', dest='varied_len', action='store_true',
+                        help=('create dynamic RNN graph which will not compute '
+                              'the RNN steps past the sequence length. '
+                              'You should avoid setting this to true '
+                              'if input is always in full sequence.'))
+    parser.set_defaults(varied_len=False)
     # Parameters for gradient descent.
     parser.add_argument('--max_grad_norm', type=float, default=10.,
                         help='clip global grad norm')

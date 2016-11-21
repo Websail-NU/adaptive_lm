@@ -57,6 +57,8 @@ class LM(object):
                                 name='y')
         self.w = tf.placeholder(tf.int32, [opt.batch_size, opt.num_steps],
                                 name='w')
+        self.seq_len = tf.placeholder(tf.int32, [opt.batch_size],
+                                     name='sq_len')
 
     def _create_graph(self, opt):
         """ Setup model graph starting from the input placeholder.
@@ -109,8 +111,12 @@ class LM(object):
                 [cell] * opt.num_layers, state_is_tuple=True)
             initial_state = cell_stack.zero_state(
                 opt.batch_size, tf.float32)
+            seq_len = None
+            if opt.varied_len:
+                seq_len = self.seq_len
             outputs, state = tf.nn.rnn(
-                cell_stack, inputs, initial_state=initial_state)
+                cell_stack, inputs, initial_state=initial_state,
+                sequence_length=seq_len)
         outputs = tf.reshape(tf.concat(1, outputs), [-1, opt.state_size])
         return outputs, initial_state, state
 

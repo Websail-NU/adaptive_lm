@@ -2,7 +2,7 @@
 """Data utility module.
 
 Todo:
-    * Test case
+    * Iterator for sentence independent data
 
 """
 import os
@@ -135,6 +135,8 @@ class DataIterator(object):
         self.y = np.zeros([batch_size, num_steps], np.int32)
         self.w = np.zeros([batch_size, num_steps], np.uint8)
         self.l = [[None for _ in range(num_steps)] for _ in range(batch_size)]
+        self.seq_len = np.zeros([batch_size], np.int32)
+        self.seq_len[:] = self._num_steps
         self._pointers = [0] * batch_size
         distance = len(self._data) / batch_size
         for i in range(batch_size):
@@ -146,7 +148,7 @@ class DataIterator(object):
 
     def next_batch(self):
         if any(t > self._epoch_tokens for t in self._read_tokens):
-            return None, None, None, None
+            return None, None, None, None,
         # reset old data
         self.x[:], self.y[:], self.w[:] = self._padding_id, self._padding_id, 0
         for i in range(len(self.l)):
@@ -165,15 +167,15 @@ class DataIterator(object):
             # increment pointers
             self._pointers[i] = p + num_tokens
             self._read_tokens[i] += num_tokens
-        return self.x, self.y, self.w, self.l
+        return self.x, self.y, self.w, self.l, self.seq_len
 
     def iterate_epoch(self, batch_size, num_steps):
         self.init_batch(batch_size, num_steps)
         while True:
-            x, y, w, l = self.next_batch()
+            x, y, w, l, seq_len = self.next_batch()
             if x is None:
                 break
-            yield x, y, w, l
+            yield x, y, w, l, seq_len
 
 def serialize_iterator(data_filepath, vocab_filepath, out_filepath):
     vocab = Vocabulary.from_vocab_file(vocab_filepath)
@@ -194,8 +196,7 @@ def corpus2bow(data_filepath, vocab_filepath, out_filepath):
     with open(out_filepath, 'w') as ofp:
         cPickle.dump(corpus_bow, ofp)
 
-def serialize_corpus(data_dir):
-    split = ['train', 'valid', 'test']
+def serialize_corpus(data_dir, split=['train', 'valid', 'test']):
     for s in split:
         corpus2bow(os.path.join(data_dir, '{}.jsonl'.format(s)),
                    os.path.join(data_dir, 'bow_vocab.txt'),

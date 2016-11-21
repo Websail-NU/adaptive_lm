@@ -29,6 +29,7 @@ w_count = {
 w_low_count = w_count.copy()
 for s in splits:
     f = os.path.join(args.text_dir, '{}.txt'.format(s))
+    # XXX: Should not hard code dataset name
     dataset = {'meta':{'name':'PTB', 'split':s}, 'key': 'ptb', 'lines':[]}
     with open(f) as ifp:
         for line in ifp:
