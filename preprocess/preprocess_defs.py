@@ -14,6 +14,8 @@ parser.add_argument("text_dir",
 parser.add_argument("stopword_file", help="stopword file path")
 parser.add_argument("--bow_vocab_size", help="Number of vocab in BOW features",
                     default=5000)
+parser.add_argument("--max_def_len", help="remove definitions that is longer than this number.",
+                    default=100)
 parser.add_argument('--only_train', dest='only_train', action='store_true')
 parser.set_defaults(only_train=False)
 
@@ -34,11 +36,14 @@ w_count = {
     def_symbol:0,
 }
 w_low_count = w_count.copy()
+args.max_def_len = int(args.max_def_len)
 for s in splits:
     f = os.path.join(args.text_dir, '{}.tsv'.format(s))
     with open(f) as ifp:
         for line in ifp:
             parts = line.lower().strip().split('\t')
+            if len(parts[3].split()) > args.max_def_len:
+                continue
             data = {'meta':{'word':parts[0], 'pos':parts[1], 'src':parts[2] },
                     'key': parts[0],
                     'lines':[' '.join([parts[0], def_symbol, parts[3]])]}
@@ -53,7 +58,6 @@ for s in splits:
             ofp = ofps[s]
             json.dump(obj=data, fp=ofp)
             ofp.write('\n')
-
 for ofp in ofps:
     ofps[ofp].close()
 
