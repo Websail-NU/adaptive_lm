@@ -2,10 +2,11 @@
 """Data utility module.
 
 Todo:
-    * Test case
+    * Iterator for sentence independent data
 
 """
 import os
+import warnings
 import codecs
 import numpy as np
 import json
@@ -67,6 +68,15 @@ class Vocabulary(object):
     def i2w(self, index):
         return self._i2w[index]
 
+    def iarr2warr(self, iarr):
+        w = []
+        for ir in iarr:
+            iw = []
+            w.append(iw)
+            for i in ir:
+                iw.append(self.i2w(i))
+        return w
+
     def finalize(self):
         self._sos_id = self.w2i(self.sos)
         self._eos_id = self.w2i(self.eos)
@@ -98,8 +108,10 @@ class DataIterator(object):
     def __init__(self, vocab=None, file_path=None):
         if vocab is not None:
             self._vocab = vocab
-            self._data, self._lidx, self._lkeys = self._parse_file(file_path)
             self._padding_id = vocab.eos_id
+            self._data, self._lidx, self._lkeys, self._max_seq_len \
+            = self._parse_file(file_path)
+
 
     def _parse_sentence(self, sentence):
         indexes = [self._vocab.w2i(word) for word in sentence.split()]
@@ -109,23 +121,33 @@ class DataIterator(object):
         data = []
         label_idx = []
         label_keys = []
+        max_seq_len = 0
         with open(filepath) as ifp:
             for line in ifp:
                 doc = json.loads(line)
                 label_idx.append(len(data))
                 label_keys.append(doc['key'])
+                seq_len = 0
                 for s in doc['lines']:
-                    data += self._parse_sentence(s)
+                    line = self._parse_sentence(s)
+                    seq_len += len(line)
+                    data += line
+                if seq_len > max_seq_len:
+                    max_seq_len = seq_len
         data = np.array(data, np.int32)
-        return data, label_idx, label_keys
+        return data, label_idx, label_keys, max_seq_len
 
     def init_batch(self, batch_size, num_steps):
+        if num_steps < 1:
+            warnings.warn("num_steps has to be more than 0.")
         self._batch_size = batch_size
         self._num_steps = num_steps
         self.x = np.zeros([batch_size, num_steps], np.int32)
         self.y = np.zeros([batch_size, num_steps], np.int32)
         self.w = np.zeros([batch_size, num_steps], np.uint8)
         self.l = [[None for _ in range(num_steps)] for _ in range(batch_size)]
+        self.seq_len = np.zeros([batch_size], np.int32)
+        self.seq_len[:] = self._num_steps
         self._pointers = [0] * batch_size
         distance = len(self._data) / batch_size
         for i in range(batch_size):
@@ -137,12 +159,12 @@ class DataIterator(object):
 
     def next_batch(self):
         if any(t > self._epoch_tokens for t in self._read_tokens):
-            return None, None, None, None
+            return None, None, None, None, None
         # reset old data
         self.x[:], self.y[:], self.w[:] = self._padding_id, self._padding_id, 0
         for i in range(len(self.l)):
             for j in range(len(self.l[0])):
-                self.l[i][j] = None
+                self.l[i][j] = -1
         # populating new data
         for i, p in enumerate(self._pointers):
             num_tokens = self._num_steps
@@ -156,15 +178,90 @@ class DataIterator(object):
             # increment pointers
             self._pointers[i] = p + num_tokens
             self._read_tokens[i] += num_tokens
-        return self.x, self.y, self.w, self.l
+        return self.x, self.y, self.w, self.l, self.seq_len
 
-    def iterate_epoch(self, batch_size, num_steps):
+    def iterate_epoch(self, batch_size, num_steps=-1):
         self.init_batch(batch_size, num_steps)
         while True:
-            x, y, w, l = self.next_batch()
+            x, y, w, l, seq_len = self.next_batch()
             if x is None:
                 break
-            yield x, y, w, l
+            yield x, y, w, l, seq_len
+
+class DefIterator(DataIterator):
+    def _parse_sentence(self, sentence):
+        indexes = [self._vocab.w2i(word) for word in sentence.split()]
+        return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
+
+    def _parse_file(self, filepath):
+        data = []
+        label_idx = []
+        label_keys = []
+        max_seq_len = 0
+        with open(filepath) as ifp:
+            for line in ifp:
+                doc = json.loads(line)
+                label_idx.append(len(data))
+                label_keys.append(self._vocab.w2i(doc['key']))
+                seq_len = 0
+                for s in doc['lines']:
+                    line = self._parse_sentence(s)
+                    seq_len += len(line)
+                    data += line
+                if seq_len > max_seq_len:
+                    max_seq_len = seq_len
+        padded_data = np.zeros([max_seq_len * len(label_keys)], np.int32)
+        padded_data[:] = self._padding_id
+        padded_label_idx = []
+        prev_idx = 0
+        for i in range(1, len(label_idx)):
+            padded_label_idx.append((i-1)*max_seq_len)
+            cur_seq_start = (i-1)*max_seq_len
+            cur_seq_end = cur_seq_start + label_idx[i] - prev_idx
+            padded_data[cur_seq_start:cur_seq_end] = data[prev_idx:label_idx[i]]
+            prev_idx = label_idx[i]
+        # data = np.array(data, np.int32)
+        return padded_data, padded_label_idx, label_keys, max_seq_len
+
+    def _shuffle_data(self):
+        shuff_keys = []
+        shuff_data = np.zeros(self._data.shape, np.int32)
+        perm_index = range(len(self._lidx))
+        random.shuffle(perm_index)
+        for i, j in enumerate(perm_index):
+            shuff_keys.append(self._lkeys[j])
+            istart = i * self._max_seq_len
+            iend = (i + 1) * self._max_seq_len
+            jstart = j * self._max_seq_len
+            jend = (j + 1) * self._max_seq_len
+            shuff_data[istart:iend] = self._data[jstart:jend]
+        self._data = shuff_data
+        self._lkeys = shuff_keys
+
+    def init_batch(self, batch_size, num_steps=-1):
+        if num_steps != -1 and num_steps != self._max_seq_len:
+            warnings.warn("num_steps is not the same as max sequence len!")
+        if num_steps == -1:
+            num_steps = self._max_seq_len
+        super(DefIterator,self).init_batch(batch_size, num_steps)
+        #XXX: this will cut off some definition
+        distance = len(self._lidx) / batch_size
+        for i in range(batch_size):
+            self._pointers[i] = self._lidx[i * distance]
+        random.shuffle(self._pointers)
+        self._shuffle_data()
+        self.l = np.zeros([batch_size, num_steps], np.int32)
+
+    def next_batch(self):
+        x, _, _, _, _ = super(DefIterator, self).next_batch()
+        if x is None:
+            return None, None, None, None, None
+        self.y[:, -1] = self._padding_id
+        self.w[:] = 0
+        self.seq_len = np.sum(self.y!=self._padding_id, axis=1) + 1
+        for i in range(self._batch_size):
+            self.w[i, 2:self.seq_len[i]] = 1
+        return self.x, self.y, self.w, self.l, self.seq_len
 
 def serialize_iterator(data_filepath, vocab_filepath, out_filepath):
     vocab = Vocabulary.from_vocab_file(vocab_filepath)
@@ -185,8 +282,7 @@ def corpus2bow(data_filepath, vocab_filepath, out_filepath):
     with open(out_filepath, 'w') as ofp:
         cPickle.dump(corpus_bow, ofp)
 
-def serialize_corpus(data_dir):
-    split = ['train', 'valid', 'test']
+def serialize_corpus(data_dir, split=['train', 'valid', 'test']):
     for s in split:
         corpus2bow(os.path.join(data_dir, '{}.jsonl'.format(s)),
                    os.path.join(data_dir, 'bow_vocab.txt'),
