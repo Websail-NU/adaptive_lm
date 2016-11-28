@@ -13,9 +13,9 @@ Todo:
 #  |_|
 #  | |
 
-def find_trainable_variables(key):
+def find_trainable_variables(top_scope, key):
     return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                             ".*{}.*".format(key))
+                             "{}/.*{}.*".format(top_scope, key))
 
 def sharded_variable(name, shape, num_shards,
                      dtype=tf.float32):
@@ -46,6 +46,7 @@ class LM(object):
         self.is_training = is_training
         self.opt = opt
         self._create_input_placeholder(opt)
+        self._top_scope = tf.get_variable_scope().name
         with tf.variable_scope(tf.get_variable_scope()):
             self._create_graph(opt)
 
@@ -174,9 +175,9 @@ class LM(object):
         return clipped_grads, all_vars
 
     def _get_variables(self):
-        emb_vars = find_trainable_variables("emb")
-        rnn_vars = find_trainable_variables("rnn")
-        softmax_vars = find_trainable_variables("softmax")
+        emb_vars = find_trainable_variables(self._top_scope, "emb")
+        rnn_vars = find_trainable_variables(self._top_scope, "rnn")
+        softmax_vars = find_trainable_variables(self._top_scope, "softmax")
         other_vars = self._get_additional_variables()
         return emb_vars, rnn_vars, softmax_vars, other_vars
 
@@ -229,9 +230,9 @@ class LMwAF(LM):
                              name="af_r_gate")
                 l = tf.mul(l, r)
                 outputs = tf.concat(1, [l, rnn_state])
-                h_w = tf.get_variable("afeatures_h_w",
+                h_w = tf.get_variable("af_h_w",
                                       [full_size, opt.state_size])
-                h_b = tf.get_variable("afeatures_h_b", [opt.state_size])
+                h_b = tf.get_variable("af_h_b", [opt.state_size])
                 h = tf.tanh(tf.matmul(outputs, h_w) + h_b)
                 outputs = tf.mul((1-z), rnn_state) + tf.mul(z, h)
         return outputs, opt.state_size
@@ -246,4 +247,4 @@ class LMwAF(LM):
         return l
 
     def _get_additional_variables(self):
-        return find_trainable_variables("afeatures")
+        return find_trainable_variables(self._top_scope, "afeatures")

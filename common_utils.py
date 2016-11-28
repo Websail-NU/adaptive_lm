@@ -53,6 +53,7 @@ class Bunch(object):
             state_size=100,
             num_softmax_sampled=0,
             run_profiler=False,
+            init_scale=0.1
         )
         return opt
 
@@ -149,6 +150,11 @@ def get_common_argparse():
                               'You should avoid setting this to true '
                               'if input is always in full sequence.'))
     parser.set_defaults(varied_len=False)
+    parser.add_argument('--reset_state', dest='reset_state',
+                        action='store_true',
+                        help=('Reset RNN state for each minibatch, '
+                              '(always reset state every epoch).'))
+    parser.set_defaults(reset_state=False)
     # Parameters for gradient descent.
     parser.add_argument('--max_grad_norm', type=float, default=10.,
                         help='clip global grad norm')
