@@ -145,7 +145,10 @@ class LM(object):
             loss = tf.nn.sampled_softmax_loss(
                 softmax_w, softmax_b, tf.to_float(state),
                 targets, opt.num_softmax_sampled, opt.vocab_size)
-        mean_loss = tf.reduce_mean(loss * tf.reshape(w, [-1]))
+        # mean_loss = tf.reduce_mean(loss * tf.reshape(w, [-1]))
+        flat_w = tf.reshape(w, [-1])
+        sum_loss = tf.reduce_sum(loss * flat_w)
+        mean_loss = sum_loss / (tf.reduce_sum(flat_w) + 1e-12)
         return mean_loss, loss
 
     def _backward(self, opt, loss):
@@ -167,10 +170,12 @@ class LM(object):
                 emb_grads[i].dense_shape)
         # getting rnn gradients for cliping
         rnn_grads = grads[:len(rnn_vars)]
-        rnn_grads, rnn_norm = tf.clip_by_global_norm(rnn_grads, opt.max_grad_norm)
+        # rnn_grads, rnn_norm = tf.clip_by_global_norm(rnn_grads, opt.max_grad_norm)
         # the rest of the gradients
         rest_grads = grads[len(rnn_vars):]
-        clipped_grads = emb_grads + rnn_grads + rest_grads
+        all_grads = emb_grads + rnn_grads + rest_grads
+        clipped_grads, _norm = tf.clip_by_global_norm(
+            all_grads, opt.max_grad_norm)
         assert len(clipped_grads) == len(orig_grads)
         return clipped_grads, all_vars
 
