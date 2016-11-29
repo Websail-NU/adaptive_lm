@@ -92,6 +92,10 @@ opt_lm.vocab_size = vocab_lm.vocab_size
 opt_dm.vocab_size = vocab_dm.vocab_size
 init_scale = opt_lm.init_scale
 
+tf.set_random_seed(1234)
+import random
+random.seed(1234)
+
 with tf.Session() as sess:
 # sess = tf.Session()
 # if True:
