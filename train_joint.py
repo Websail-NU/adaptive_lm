@@ -103,7 +103,8 @@ with tf.Session() as sess:
 # if True:
     logger.debug(
             '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
-    initializer = tf.random_uniform_initializer(-init_scale, init_scale)
+    initializer = tf.random_uniform_initializer(-init_scale, init_scale,
+                                                seed=1234)
     logger.debug('- Creating training LM...')
     with tf.variable_scope('LM', reuse=None, initializer=initializer):
         train_lm = lm.LM(opt_lm)
