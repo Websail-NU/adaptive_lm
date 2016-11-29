@@ -3,9 +3,13 @@ import logging
 import time
 import os
 import json
+import random
+random.seed(1234)
 
-import tensorflow as tf
 import numpy as np
+np.random.seed(1234)
+import tensorflow as tf
+tf.set_random_seed(1234)
 
 import lm
 import common_utils
@@ -13,12 +17,6 @@ import data_utils
 
 logger = common_utils.get_logger()
 logger.setLevel(logging.DEBUG)
-
-
-tf.set_random_seed(1234)
-import random
-random.seed(1234)
-np.random.seed(1234)
 
 def transfer_emb(sess, source, target, index_map):
     s_emb_var = lm.find_trainable_variables(source, "emb")[0]
@@ -98,13 +96,14 @@ opt_lm.vocab_size = vocab_lm.vocab_size
 opt_dm.vocab_size = vocab_dm.vocab_size
 init_scale = opt_lm.init_scale
 
-with tf.Session() as sess:
+sess_config =tf.ConfigProto(log_device_placement=False)
+
+with tf.Session(config=sess_config) as sess:
 # sess = tf.Session()
 # if True:
     logger.debug(
             '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
-    initializer = tf.random_uniform_initializer(-init_scale, init_scale,
-                                                seed=1234)
+    initializer = tf.random_uniform_initializer(-init_scale, init_scale)
     logger.debug('- Creating training LM...')
     with tf.variable_scope('LM', reuse=None, initializer=initializer):
         train_lm = lm.LM(opt_lm)
@@ -120,7 +119,7 @@ with tf.Session() as sess:
     for v in tf.trainable_variables():
         logger.debug("- {} {} {}".format(v.name, v.get_shape(), v.device))
     logger.info('Initializing vairables...')
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
     logger.info('Start training loop:')
     logger.debug('\n' + common_utils.SUN_BRO())
 
@@ -150,14 +149,3 @@ with tf.Session() as sess:
         #             train_dm_ppl, train_lm_ppl, valid_lm_ppl))
         print('{}\t{}\t{}\t{}'.format(
             epoch+1, train_dm_ppl, train_lm_ppl, valid_lm_ppl))
-
-
-    # XXX: do loop
-    # writer = tf.train.SummaryWriter("tf.log", sess.graph)
-    # writer.close()
-
-    # logger.info('- Training LM:')
-    # train_ppl, steps = run_epoch(sess, train_lm, train_lm_iter,
-    #                              opt_lm, train_lm_op)
-    # train_ppl, steps = run_epoch(sess, train_dm, train_dm_iter,
-    #                              opt_dm, train_dm_op)
