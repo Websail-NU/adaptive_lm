@@ -14,6 +14,11 @@ import data_utils
 logger = common_utils.get_logger()
 logger.setLevel(logging.DEBUG)
 
+
+tf.set_random_seed(1234)
+import random
+random.seed(1234)
+
 def transfer_emb(sess, source, target, index_map):
     s_emb_var = lm.find_trainable_variables(source, "emb")[0]
     t_emb_var = lm.find_trainable_variables(target, "emb")[0]
@@ -91,10 +96,6 @@ lm2dm, dm2lm = data_utils.Vocabulary.vocab_index_map(vocab_lm, vocab_dm)
 opt_lm.vocab_size = vocab_lm.vocab_size
 opt_dm.vocab_size = vocab_dm.vocab_size
 init_scale = opt_lm.init_scale
-
-tf.set_random_seed(1234)
-import random
-random.seed(1234)
 
 with tf.Session() as sess:
 # sess = tf.Session()
