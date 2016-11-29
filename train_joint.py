@@ -98,7 +98,7 @@ init_scale = opt_lm.init_scale
 
 sess_config =tf.ConfigProto(log_device_placement=False)
 
-with tf.Session(config=sess_config) as sess:
+with tf.device('/gpu:0'), tf.Session(config=sess_config) as sess:
 # sess = tf.Session()
 # if True:
     logger.debug(
