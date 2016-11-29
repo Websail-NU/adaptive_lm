@@ -32,7 +32,7 @@ def sharded_variable(name, shape, num_shards,
 def train_op(model, opt):
     lr = tf.Variable(opt.learning_rate, trainable=False)
     global_step = tf.get_variable("global_step", [], tf.float32,
-                                #   initializer=tf.zeros_initializer,
+                                  initializer=tf.zeros_initializer,
                                   trainable=False)
     optimizer = tf.train.GradientDescentOptimizer(lr)
     train_op = optimizer.apply_gradients(
