@@ -129,10 +129,10 @@ with tf.Session() as sess:
         valid_lm_ppl, vsteps = run_epoch(sess, valid_lm, valid_lm_iter, opt_lm)
         # logger.info('Train ppl = {}, Valid ppl = {}'.format(
         #             train_lm_ppl, valid_lm_ppl))
-        logger.info('{}\t{}'.format(
-                train_lm_ppl, valid_lm_ppl))
+        print('{}\t{}\t{}\t{}'.format(
+            epoch+1, "", train_lm_ppl, valid_lm_ppl))
 
-    for epoch in range(10):
+    for epoch in range(3, 13):
         # logger.info("========= Start epoch {} =========".format(epoch+1))
         # logger.info("Traning DM...")
         transfer_emb(sess, "LM", "DM", lm2dm)
@@ -146,8 +146,8 @@ with tf.Session() as sess:
         valid_lm_ppl, vsteps = run_epoch(sess, valid_lm, valid_lm_iter, opt_lm)
         # logger.info('-DM ppl = {}, Train ppl = {}, Valid ppl = {}'.format(
         #             train_dm_ppl, train_lm_ppl, valid_lm_ppl))
-        logger.info('{}\t{}\t{}'.format(
-                    train_dm_ppl, train_lm_ppl, valid_lm_ppl))
+        print('{}\t{}\t{}\t{}'.format(
+            epoch+1, train_dm_ppl, train_lm_ppl, valid_lm_ppl))
 
 
     # XXX: do loop
