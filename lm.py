@@ -13,9 +13,9 @@ Todo:
 #  |_|
 #  | |
 
-def find_trainable_variables(key):
+def find_trainable_variables(top_scope, key):
     return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                             ".*{}.*".format(key))
+                             "{}/.*{}.*".format(top_scope, key))
 
 def sharded_variable(name, shape, num_shards,
                      dtype=tf.float32):
@@ -31,7 +31,7 @@ def sharded_variable(name, shape, num_shards,
 
 def train_op(model, opt):
     lr = tf.Variable(opt.learning_rate, trainable=False)
-    global_step = tf.get_variable("global_step", [], tf.int32,
+    global_step = tf.get_variable("global_step", [], tf.float32,
                                   initializer=tf.zeros_initializer,
                                   trainable=False)
     optimizer = tf.train.GradientDescentOptimizer(lr)
@@ -46,6 +46,7 @@ class LM(object):
         self.is_training = is_training
         self.opt = opt
         self._create_input_placeholder(opt)
+        self._top_scope = tf.get_variable_scope().name
         with tf.variable_scope(tf.get_variable_scope()):
             self._create_graph(opt)
 
@@ -144,7 +145,10 @@ class LM(object):
             loss = tf.nn.sampled_softmax_loss(
                 softmax_w, softmax_b, tf.to_float(state),
                 targets, opt.num_softmax_sampled, opt.vocab_size)
-        mean_loss = tf.reduce_mean(loss * tf.reshape(w, [-1]))
+        # mean_loss = tf.reduce_mean(loss * tf.reshape(w, [-1]))
+        flat_w = tf.reshape(w, [-1])
+        sum_loss = tf.reduce_sum(loss * flat_w)
+        mean_loss = sum_loss / (tf.reduce_sum(flat_w) + 1e-12)
         return mean_loss, loss
 
     def _backward(self, opt, loss):
@@ -166,17 +170,19 @@ class LM(object):
                 emb_grads[i].dense_shape)
         # getting rnn gradients for cliping
         rnn_grads = grads[:len(rnn_vars)]
-        rnn_grads, rnn_norm = tf.clip_by_global_norm(rnn_grads, opt.max_grad_norm)
+        # rnn_grads, rnn_norm = tf.clip_by_global_norm(rnn_grads, opt.max_grad_norm)
         # the rest of the gradients
         rest_grads = grads[len(rnn_vars):]
-        clipped_grads = emb_grads + rnn_grads + rest_grads
+        all_grads = emb_grads + rnn_grads + rest_grads
+        clipped_grads, _norm = tf.clip_by_global_norm(
+            all_grads, opt.max_grad_norm)
         assert len(clipped_grads) == len(orig_grads)
         return clipped_grads, all_vars
 
     def _get_variables(self):
-        emb_vars = find_trainable_variables("emb")
-        rnn_vars = find_trainable_variables("rnn")
-        softmax_vars = find_trainable_variables("softmax")
+        emb_vars = find_trainable_variables(self._top_scope, "emb")
+        rnn_vars = find_trainable_variables(self._top_scope, "rnn")
+        softmax_vars = find_trainable_variables(self._top_scope, "softmax")
         other_vars = self._get_additional_variables()
         return emb_vars, rnn_vars, softmax_vars, other_vars
 
@@ -229,9 +235,9 @@ class LMwAF(LM):
                              name="af_r_gate")
                 l = tf.mul(l, r)
                 outputs = tf.concat(1, [l, rnn_state])
-                h_w = tf.get_variable("afeatures_h_w",
+                h_w = tf.get_variable("af_h_w",
                                       [full_size, opt.state_size])
-                h_b = tf.get_variable("afeatures_h_b", [opt.state_size])
+                h_b = tf.get_variable("af_h_b", [opt.state_size])
                 h = tf.tanh(tf.matmul(outputs, h_w) + h_b)
                 outputs = tf.mul((1-z), rnn_state) + tf.mul(z, h)
         return outputs, opt.state_size
@@ -246,4 +252,4 @@ class LMwAF(LM):
         return l
 
     def _get_additional_variables(self):
-        return find_trainable_variables("afeatures")
+        return find_trainable_variables(self._top_scope, "afeatures")
