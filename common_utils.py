@@ -44,7 +44,7 @@ class Bunch(object):
             num_shards=1,
             num_layers=1,
             varied_len=False,
-            learning_rate=0.8,
+            learning_rate=0.5,
             max_grad_norm=10.0,
             emb_keep_prob=0.9,
             keep_prob=0.75,
@@ -94,13 +94,12 @@ def get_initial_training_state():
         epoch = 0,
         val_ppl = float('inf'),
         best_val_ppl = float('inf'),
-        learning_rate = 0,
+        learning_rate = 0.01,
         best_epoch = -1,
         last_imp_val_ppl = float('inf'),
         last_imp_epoch = -1,
         imp_wait = 0
     )
-
 
 def get_common_argparse():
     parser = argparse.ArgumentParser()
@@ -158,7 +157,7 @@ def get_common_argparse():
     # Parameters for gradient descent.
     parser.add_argument('--max_grad_norm', type=float, default=10.,
                         help='clip global grad norm')
-    parser.add_argument('--learning_rate', type=float, default=0.8,
+    parser.add_argument('--learning_rate', type=float, default=0.5,
                         help='initial learning rate')
     parser.add_argument('--min_learning_rate', type=float, default=0.01,
                         help='initial learning rate')

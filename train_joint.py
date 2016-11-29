@@ -14,6 +14,14 @@ import data_utils
 logger = common_utils.get_logger()
 logger.setLevel(logging.DEBUG)
 
+def transfer_emb(sess, source, target, index_map):
+    s_emb_var = lm.find_trainable_variables(source, "emb")[0]
+    t_emb_var = lm.find_trainable_variables(target, "emb")[0]
+    s_emb, t_emb = sess.run([s_emb_var, t_emb_var])
+    for k in index_map.keys():
+        t_emb[index_map[k]] = s_emb[k]
+    sess.run(tf.assign(t_emb_var, t_emb))
+
 def run_epoch(sess, m, data_iter, opt, train_op=tf.no_op()):
     """ train the model on the given data. """
     start_time = time.time()
@@ -54,7 +62,7 @@ opt_lm = common_utils.Bunch.default_model_options()
 opt_lm.update_from_ns(args)
 opt_dm = common_utils.Bunch.default_model_options()
 opt_dm.update_from_ns(args)
-opt_dm.af_mode = 'gated_state'
+opt_dm.af_mode = 'concat_state'
 opt_dm.varied_len = True
 opt_dm.reset_state = True
 
@@ -78,11 +86,15 @@ logger.debug('- Loading train DM data from {}'.format(train_dm_path))
 train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path)
 opt_dm.num_steps = train_dm_iter._max_seq_len
 
+lm2dm, dm2lm = data_utils.Vocabulary.vocab_index_map(vocab_lm, vocab_dm)
+
 opt_lm.vocab_size = vocab_lm.vocab_size
 opt_dm.vocab_size = vocab_dm.vocab_size
 init_scale = opt_lm.init_scale
 
 with tf.Session() as sess:
+# sess = tf.Session()
+# if True:
     logger.debug(
             '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
     initializer = tf.random_uniform_initializer(-init_scale, init_scale)
@@ -104,7 +116,22 @@ with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
     logger.info('Start training loop:')
     logger.debug('\n' + common_utils.SUN_BRO())
+
+    for epoch in range(3):
+        logger.info("========= Start epoch {} =========".format(epoch+1))
+        train_lm_ppl, steps = run_epoch(sess, train_lm, train_lm_iter,
+                                        opt_lm, train_lm_op)
+        valid_lm_ppl, vsteps = run_epoch(sess, valid_lm, valid_lm_iter, opt_lm)
+        logger.info('- Train ppl = {}, Valid ppl = {}'.format(
+                train_ppl, valid_ppl))
+
+
     # XXX: do loop
-    logger.info('- Training LM:')
-    train_ppl, steps = run_epoch(sess, train_dm, train_dm_iter,
-                                 opt_dm, train_dm_op)
+    # writer = tf.train.SummaryWriter("tf.log", sess.graph)
+    # writer.close()
+
+    # logger.info('- Training LM:')
+    # train_ppl, steps = run_epoch(sess, train_lm, train_lm_iter,
+    #                              opt_lm, train_lm_op)
+    # train_ppl, steps = run_epoch(sess, train_dm, train_dm_iter,
+    #                              opt_dm, train_dm_op)

@@ -68,6 +68,9 @@ class Vocabulary(object):
     def i2w(self, index):
         return self._i2w[index]
 
+    def word_set(self):
+        return set(self._w2i.keys())
+
     def iarr2warr(self, iarr):
         w = []
         for ir in iarr:
@@ -103,6 +106,16 @@ class Vocabulary(object):
                 vocab.add(word, int(count))
         vocab.finalize()
         return vocab
+
+    @staticmethod
+    def vocab_index_map(vocab_a, vocab_b):
+        a2b = {}
+        b2a = {}
+        for w in vocab_a.word_set():
+            a2b[vocab_a.w2i(w)] = vocab_b.w2i(w)
+        for w in vocab_b.word_set():
+            b2a[vocab_b.w2i(w)] = vocab_a.w2i(w)
+        return a2b, b2a
 
 class DataIterator(object):
     def __init__(self, vocab=None, file_path=None):
