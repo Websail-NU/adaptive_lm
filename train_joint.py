@@ -18,6 +18,7 @@ logger.setLevel(logging.DEBUG)
 tf.set_random_seed(1234)
 import random
 random.seed(1234)
+np.random.seed(1234)
 
 def transfer_emb(sess, source, target, index_map):
     s_emb_var = lm.find_trainable_variables(source, "emb")[0]
