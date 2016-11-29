@@ -123,7 +123,23 @@ with tf.Session() as sess:
                                         opt_lm, train_lm_op)
         valid_lm_ppl, vsteps = run_epoch(sess, valid_lm, valid_lm_iter, opt_lm)
         logger.info('- Train ppl = {}, Valid ppl = {}'.format(
-                train_ppl, valid_ppl))
+                train_lm_ppl, valid_lm_ppl))
+
+    for epoch in range(3):
+        logger.info("========= Start epoch {} =========".format(epoch+1))
+        logger.info("Traning DM...")
+        transfer_emb(sess, "LM", "DM", lm2dm)
+        train_dm_ppl, dsteps = run_epoch(sess, train_dm, train_dm_iter,
+                                        opt_dm, train_dm_op)
+        logger.info("Traning LM...")
+        transfer_emb(sess, "DM", "LM", dm2lm)
+        train_lm_ppl, lsteps = run_epoch(sess, train_lm, train_lm_iter,
+                                         opt_lm, train_lm_op)
+        logger.info("Validating LM...")
+        valid_lm_ppl, vsteps = run_epoch(sess, valid_lm, valid_lm_iter, opt_lm)
+        logger.info('-DM ppl = {}, Train ppl = {}, Valid ppl = {}'.format(
+                    train_dm_ppl, train_lm_ppl, valid_lm_ppl))
+
 
 
     # XXX: do loop
