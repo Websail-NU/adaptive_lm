@@ -18,11 +18,11 @@ import data_utils
 logger = common_utils.get_logger()
 logger.setLevel(logging.DEBUG)
 
-def transfer_emb(sess, source, target, index_map):
+def transfer_emb(sess, source, target, shortlist, index_map):
     s_emb_var = lm.find_trainable_variables(source, "emb")[0]
     t_emb_var = lm.find_trainable_variables(target, "emb")[0]
     s_emb, t_emb = sess.run([s_emb_var, t_emb_var])
-    for k in index_map.keys():
+    for k in shortlist:
         t_emb[index_map[k]] = s_emb[k]
     sess.run(tf.assign(t_emb_var, t_emb))
 
@@ -67,7 +67,9 @@ opt_lm.update_from_ns(args)
 opt_dm = common_utils.Bunch.default_model_options()
 opt_dm.update_from_ns(args)
 opt_dm.af_mode = 'gated_state'
-opt_dm.varied_len = True
+# With GPU, this will slow us down.
+# A proper weights to the loss function is enough to get correct gradients
+# opt_dm.varied_len = True
 opt_dm.reset_state = True
 
 vocab_lm_path = "data/ptb/preprocess/vocab.txt"
@@ -75,6 +77,7 @@ train_lm_path = "data/ptb/preprocess/train.jsonl"
 valid_lm_path = "data/ptb/preprocess/valid.jsonl"
 vocab_dm_path = "data/ptb_defs/preprocess/vocab.txt"
 train_dm_path = "data/ptb_defs/preprocess/train.jsonl"
+shortlist_path = "data/ptb_defs/train_shortlist.txt"
 logger.info('Loading data set...')
 logger.debug('- Loading vocab LM from {}'.format(vocab_lm_path))
 vocab_lm = data_utils.Vocabulary.from_vocab_file(vocab_lm_path)
@@ -89,6 +92,11 @@ valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path)
 logger.debug('- Loading train DM data from {}'.format(train_dm_path))
 train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path)
 opt_dm.num_steps = train_dm_iter._max_seq_len
+logger.debug('- Loading shortlist ID from {}'.format(shortlist_path))
+shortlist_lm = data_utils.Vocabulary.list_ids_from_file(
+    shortlist_path, vocab_lm)
+shortlist_dm = data_utils.Vocabulary.list_ids_from_file(
+    shortlist_path, vocab_dm)
 
 lm2dm, dm2lm = data_utils.Vocabulary.vocab_index_map(vocab_lm, vocab_dm)
 
@@ -123,7 +131,7 @@ with tf.device('/gpu:0'), tf.Session(config=sess_config) as sess:
     logger.info('Start training loop:')
     logger.debug('\n' + common_utils.SUN_BRO())
 
-    for epoch in range(3):
+    for epoch in range(5):
         # logger.info("========= Start epoch {} =========".format(epoch+1))
         train_lm_ppl, steps = run_epoch(sess, train_lm, train_lm_iter,
                                         opt_lm, train_lm_op)
@@ -136,11 +144,11 @@ with tf.device('/gpu:0'), tf.Session(config=sess_config) as sess:
     for epoch in range(3, 13):
         # logger.info("========= Start epoch {} =========".format(epoch+1))
         # logger.info("Traning DM...")
-        transfer_emb(sess, "LM", "DM", lm2dm)
+        transfer_emb(sess, "LM", "DM", shortlist_lm, lm2dm)
         train_dm_ppl, dsteps = run_epoch(sess, train_dm, train_dm_iter,
                                         opt_dm, train_dm_op)
         # logger.info("Traning LM...")
-        transfer_emb(sess, "DM", "LM", dm2lm)
+        transfer_emb(sess, "DM", "LM", shortlist_dm, dm2lm)
         train_lm_ppl, lsteps = run_epoch(sess, train_lm, train_lm_iter,
                                          opt_lm, train_lm_op)
         # logger.info("Validating LM...")

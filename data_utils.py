@@ -117,6 +117,15 @@ class Vocabulary(object):
             b2a[vocab_b.w2i(w)] = vocab_a.w2i(w)
         return a2b, b2a
 
+    @staticmethod
+    def list_ids_from_file(filepath, vocab):
+        l = []
+        with codecs.open(filepath, 'r', 'utf-8') as ifp:
+            for line in ifp:
+                word = line.strip().split()[0]
+                l.append(vocab.w2i(word))
+        return l
+
 class DataIterator(object):
     def __init__(self, vocab=None, file_path=None):
         if vocab is not None:
