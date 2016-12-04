@@ -237,7 +237,7 @@ def main(opt_lm, opt_dm):
 if __name__ == "__main__":
     global_time = time.time()
     parser = common_utils.get_common_argparse()
-    parser.add_argument('--train_dm', dest='reset_state',
+    parser.add_argument('--train_dm', dest='train_dm',
                         action='store_true', help='train DM')
     parser.set_defaults(train_dm=False)
     parser.add_argument('--af_mode', type=str, default='gated_state',
