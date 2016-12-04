@@ -137,7 +137,8 @@ class DataIterator(object):
 
     def _parse_sentence(self, sentence):
         indexes = [self._vocab.w2i(word) for word in sentence.split()]
-        return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
+        # return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
+        return indexes + [self._vocab.eos_id]
 
     def _parse_file(self, filepath):
         data = []
@@ -211,9 +212,9 @@ class DataIterator(object):
             yield x, y, w, l, seq_len
 
 class DefIterator(DataIterator):
-    def _parse_sentence(self, sentence):
-        indexes = [self._vocab.w2i(word) for word in sentence.split()]
-        return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
+    # def _parse_sentence(self, sentence):
+    #     indexes = [self._vocab.w2i(word) for word in sentence.split()]
+    #     return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
 
     def _parse_file(self, filepath):
         data = []
@@ -282,7 +283,7 @@ class DefIterator(DataIterator):
         self.w[:] = 0
         self.seq_len = np.sum(self.y!=self._padding_id, axis=1) + 1
         for i in range(self._batch_size):
-            self.w[i, 2:self.seq_len[i]] = 1
+            self.w[i, 1:self.seq_len[i]] = 1
         return self.x, self.y, self.w, self.l, self.seq_len
 
 def serialize_iterator(data_filepath, vocab_filepath, out_filepath):

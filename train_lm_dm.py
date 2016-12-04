@@ -106,54 +106,54 @@ init_scale = opt_lm.init_scale
 
 sess_config =tf.ConfigProto(log_device_placement=False)
 
-with tf.device('/gpu:0'), tf.Session(config=sess_config) as sess:
-# sess = tf.Session()
-# if True:
-    logger.debug(
-            '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
-    initializer = tf.random_uniform_initializer(-init_scale, init_scale)
-    logger.debug('- Creating training LM...')
-    with tf.variable_scope('LM', reuse=None, initializer=initializer):
-        train_lm = lm.LM(opt_lm)
-        train_lm_op, lr_lm_var = lm.train_op(train_lm, train_lm.opt)
-    logger.debug('- Creating validating LM (reuse params)...')
-    with tf.variable_scope('LM', reuse=True, initializer=initializer):
-        valid_lm = lm.LM(opt_lm, is_training=False)
-    logger.debug('- Creating training DM ...')
-    with tf.variable_scope('DM', reuse=None, initializer=initializer):
-        train_dm = lm.LMwAF(opt_dm)
-        train_dm_op, lr_dm_var = lm.train_op(train_dm, train_dm.opt)
-    logger.debug('Trainable variables:')
-    for v in tf.trainable_variables():
-        logger.debug("- {} {} {}".format(v.name, v.get_shape(), v.device))
-    logger.info('Initializing vairables...')
-    sess.run(tf.global_variables_initializer())
-    logger.info('Start training loop:')
-    logger.debug('\n' + common_utils.SUN_BRO())
-
-    for epoch in range(5):
-        # logger.info("========= Start epoch {} =========".format(epoch+1))
-        train_lm_ppl, steps = run_epoch(sess, train_lm, train_lm_iter,
-                                        opt_lm, train_lm_op)
-        valid_lm_ppl, vsteps = run_epoch(sess, valid_lm, valid_lm_iter, opt_lm)
-        # logger.info('Train ppl = {}, Valid ppl = {}'.format(
-        #             train_lm_ppl, valid_lm_ppl))
-        print('{}\t{}\t{}\t{}'.format(
-            epoch+1, "", train_lm_ppl, valid_lm_ppl))
-
-    for epoch in range(3, 13):
-        # logger.info("========= Start epoch {} =========".format(epoch+1))
-        # logger.info("Traning DM...")
-        transfer_emb(sess, "LM", "DM", shortlist_lm, lm2dm)
-        train_dm_ppl, dsteps = run_epoch(sess, train_dm, train_dm_iter,
-                                        opt_dm, train_dm_op)
-        # logger.info("Traning LM...")
-        transfer_emb(sess, "DM", "LM", shortlist_dm, dm2lm)
-        train_lm_ppl, lsteps = run_epoch(sess, train_lm, train_lm_iter,
-                                         opt_lm, train_lm_op)
-        # logger.info("Validating LM...")
-        valid_lm_ppl, vsteps = run_epoch(sess, valid_lm, valid_lm_iter, opt_lm)
-        # logger.info('-DM ppl = {}, Train ppl = {}, Valid ppl = {}'.format(
-        #             train_dm_ppl, train_lm_ppl, valid_lm_ppl))
-        print('{}\t{}\t{}\t{}'.format(
-            epoch+1, train_dm_ppl, train_lm_ppl, valid_lm_ppl))
+# with tf.device('/gpu:0'), tf.Session(config=sess_config) as sess:
+# # sess = tf.Session()
+# # if True:
+#     logger.debug(
+#             '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
+#     initializer = tf.random_uniform_initializer(-init_scale, init_scale)
+#     logger.debug('- Creating training LM...')
+#     with tf.variable_scope('LM', reuse=None, initializer=initializer):
+#         train_lm = lm.LM(opt_lm)
+#         train_lm_op, lr_lm_var = lm.train_op(train_lm, train_lm.opt)
+#     logger.debug('- Creating validating LM (reuse params)...')
+#     with tf.variable_scope('LM', reuse=True, initializer=initializer):
+#         valid_lm = lm.LM(opt_lm, is_training=False)
+#     logger.debug('- Creating training DM ...')
+#     with tf.variable_scope('DM', reuse=None, initializer=initializer):
+#         train_dm = lm.LMwAF(opt_dm)
+#         train_dm_op, lr_dm_var = lm.train_op(train_dm, train_dm.opt)
+#     logger.debug('Trainable variables:')
+#     for v in tf.trainable_variables():
+#         logger.debug("- {} {} {}".format(v.name, v.get_shape(), v.device))
+#     logger.info('Initializing vairables...')
+#     sess.run(tf.global_variables_initializer())
+#     logger.info('Start training loop:')
+#     logger.debug('\n' + common_utils.SUN_BRO())
+#
+#     for epoch in range(5):
+#         # logger.info("========= Start epoch {} =========".format(epoch+1))
+#         train_lm_ppl, steps = run_epoch(sess, train_lm, train_lm_iter,
+#                                         opt_lm, train_lm_op)
+#         valid_lm_ppl, vsteps = run_epoch(sess, valid_lm, valid_lm_iter, opt_lm)
+#         # logger.info('Train ppl = {}, Valid ppl = {}'.format(
+#         #             train_lm_ppl, valid_lm_ppl))
+#         print('{}\t{}\t{}\t{}'.format(
+#             epoch+1, "", train_lm_ppl, valid_lm_ppl))
+#
+#     for epoch in range(3, 13):
+#         # logger.info("========= Start epoch {} =========".format(epoch+1))
+#         # logger.info("Traning DM...")
+#         transfer_emb(sess, "LM", "DM", shortlist_lm, lm2dm)
+#         train_dm_ppl, dsteps = run_epoch(sess, train_dm, train_dm_iter,
+#                                         opt_dm, train_dm_op)
+#         # logger.info("Traning LM...")
+#         transfer_emb(sess, "DM", "LM", shortlist_dm, dm2lm)
+#         train_lm_ppl, lsteps = run_epoch(sess, train_lm, train_lm_iter,
+#                                          opt_lm, train_lm_op)
+#         # logger.info("Validating LM...")
+#         valid_lm_ppl, vsteps = run_epoch(sess, valid_lm, valid_lm_iter, opt_lm)
+#         # logger.info('-DM ppl = {}, Train ppl = {}, Valid ppl = {}'.format(
+#         #             train_dm_ppl, train_lm_ppl, valid_lm_ppl))
+#         print('{}\t{}\t{}\t{}'.format(
+#             epoch+1, train_dm_ppl, train_lm_ppl, valid_lm_ppl))

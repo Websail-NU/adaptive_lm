@@ -3,7 +3,7 @@ import argparse
 import json
 import operator
 
-sos_symbol = '<s>'
+# sos_symbol = '<s>'
 eos_symbol = '</s>'
 unk_symbol = '<unk>'
 def_symbol = '<def>'
@@ -30,7 +30,7 @@ for s in splits:
                                 'preprocess/{}.jsonl'.format(s)), 'w')
 
 w_count = {
-    sos_symbol:0,
+    # sos_symbol:0,
     eos_symbol:0,
     unk_symbol:0,
     def_symbol:0,
@@ -47,9 +47,9 @@ for s in splits:
             data = {'meta':{'word':parts[0], 'pos':parts[1], 'src':parts[2] },
                     'key': parts[0],
                     'lines':[' '.join([parts[0], def_symbol, parts[3]])]}
-            w_count[sos_symbol] += 1
+            # w_count[sos_symbol] += 1
             w_count[eos_symbol] += 1
-            w_low_count[sos_symbol] += 1
+            # w_low_count[sos_symbol] += 1
             w_low_count[eos_symbol] += 1
             for token in data['lines'][0].split():
                 w_count[token] = w_count.get(token, 0) + 1
