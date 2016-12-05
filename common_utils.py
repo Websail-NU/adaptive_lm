@@ -67,8 +67,8 @@ def unicode2string(data):
     else:
         return data
 
-def get_logger(log_file_path=None):
-    root_logger = logging.getLogger()
+def get_logger(log_file_path=None, name="exp"):
+    root_logger = logging.getLogger(name)
     if log_file_path is not None:
         log_formatter = logging.Formatter(
             "%(asctime)s [%(levelname)-5.5s] %(message)s",
