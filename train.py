@@ -73,8 +73,10 @@ def main(opt):
             logger.debug("- Leanring rate (variable) = {}".format(
                 sess.run(lr_var)))
             logger.info('- Training:')
-            train_ppl, steps = run_epoch(sess, model, train_iter, opt, train_op)
+            train_ppl, steps = run_epoch(sess, model, train_iter, opt,
+                                         train_op=train_op)
             logger.info('- Validating:')
+            token_loss = np.zeros([vocab.vocab_size, 2])
             valid_ppl, vsteps = run_epoch(sess, vmodel, valid_iter, opt)
             logger.info('- Train ppl = {}, Valid ppl = {}'.format(
                 train_ppl, valid_ppl))
