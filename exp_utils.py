@@ -23,12 +23,11 @@ import data_utils
 
 def resume_if_possible(opt, sess, saver, state):
     logger = logging.getLogger("exp")
-    # XXX: file name changes! This does not work anymore
     ckpt_path = os.path.join(opt.output_dir, "latest_model.ckpt")
     state_path = os.path.join(opt.output_dir, "latest_state.json")
     logger.debug('Looking for checkpoint at {}'.format(ckpt_path))
     logger.debug('Looking for state at {}'.format(state_path))
-    if os.path.exists(ckpt_path) and os.path.exists(state_path):
+    if os.path.exists(state_path):
         logger.info('Found existing checkpoint, resume training')
         with open(state_path) as ifp:
             logger.debug('- Loading state...')
