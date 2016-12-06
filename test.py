@@ -66,7 +66,8 @@ def main(opt):
                     t_ppl = 0
                     if token_loss[i, 0] > 0:
                         t_ppl = np.exp(token_loss[i, 1] / token_loss[i, 0])
-                    ofp.write("{}\t{}\n".format(vocab.i2w(i), t_ppl))
+                    ofp.write("{}\t{}\t{}\n".format(
+                        vocab.i2w(i), token_loss[i, 0], t_ppl))
 
 if __name__ == "__main__":
     global_time = time.time()
