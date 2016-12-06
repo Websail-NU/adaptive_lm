@@ -3,7 +3,7 @@ import argparse
 import json
 import operator
 
-sos_symbol = '<s>'
+# sos_symbol = '<s>'
 eos_symbol = '</s>'
 unk_symbol = '<unk>'
 
@@ -26,7 +26,7 @@ for s in splits:
 
 book = None
 w_count = {
-    sos_symbol:0,
+    # sos_symbol:0,
     eos_symbol:0,
     unk_symbol:0
 }
@@ -50,9 +50,9 @@ for s in splits:
             else:
                 line = line.strip()
                 book['lines'].append(line)
-                w_count[sos_symbol] += 1
+                # w_count[sos_symbol] += 1
                 w_count[eos_symbol] += 1
-                w_low_count[sos_symbol] += 1
+                # w_low_count[sos_symbol] += 1
                 w_low_count[eos_symbol] += 1
                 for token in line.split():
                     w_count[token] = w_count.get(token, 0) + 1

@@ -8,4 +8,5 @@ mv ptb_words_defs.tsv train.tsv
 cd ../
 echo "[2/2] Preprocessing text files..."
 mkdir ptb_defs/preprocess
+awk -F '\t' '{print $1}' ptb_defs/train.tsv | sort | uniq > ptb_defs/preprocess/train_shortlist.txt
 python ../preprocess/preprocess_defs.py ptb_defs/ stopwords.txt --bow_vocab_size 2000 --only_train --max_def_len 30

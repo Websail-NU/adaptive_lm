@@ -117,6 +117,15 @@ class Vocabulary(object):
             b2a[vocab_b.w2i(w)] = vocab_a.w2i(w)
         return a2b, b2a
 
+    @staticmethod
+    def list_ids_from_file(filepath, vocab):
+        l = []
+        with codecs.open(filepath, 'r', 'utf-8') as ifp:
+            for line in ifp:
+                word = line.strip().split()[0]
+                l.append(vocab.w2i(word))
+        return l
+
 class DataIterator(object):
     def __init__(self, vocab=None, file_path=None):
         if vocab is not None:
@@ -128,7 +137,8 @@ class DataIterator(object):
 
     def _parse_sentence(self, sentence):
         indexes = [self._vocab.w2i(word) for word in sentence.split()]
-        return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
+        # return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
+        return indexes + [self._vocab.eos_id]
 
     def _parse_file(self, filepath):
         data = []
@@ -171,7 +181,7 @@ class DataIterator(object):
         self._read_tokens = [0 for _ in range(batch_size)]
 
     def next_batch(self):
-        if any(t > self._epoch_tokens for t in self._read_tokens):
+        if any((t + 1) >= self._epoch_tokens for t in self._read_tokens):
             return None, None, None, None, None
         # reset old data
         self.x[:], self.y[:], self.w[:] = self._padding_id, self._padding_id, 0
@@ -202,9 +212,9 @@ class DataIterator(object):
             yield x, y, w, l, seq_len
 
 class DefIterator(DataIterator):
-    def _parse_sentence(self, sentence):
-        indexes = [self._vocab.w2i(word) for word in sentence.split()]
-        return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
+    # def _parse_sentence(self, sentence):
+    #     indexes = [self._vocab.w2i(word) for word in sentence.split()]
+    #     return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
 
     def _parse_file(self, filepath):
         data = []
@@ -273,7 +283,7 @@ class DefIterator(DataIterator):
         self.w[:] = 0
         self.seq_len = np.sum(self.y!=self._padding_id, axis=1) + 1
         for i in range(self._batch_size):
-            self.w[i, 2:self.seq_len[i]] = 1
+            self.w[i, 1:self.seq_len[i]] = 1
         return self.x, self.y, self.w, self.l, self.seq_len
 
 def serialize_iterator(data_filepath, vocab_filepath, out_filepath):
