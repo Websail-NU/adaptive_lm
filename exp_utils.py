@@ -123,7 +123,7 @@ def run_epoch(sess, m, data_iter, opt,
         costs += cost
         num_words += np.sum(w)
         if token_loss is not None:
-            for t in enumerate(np.nditer(y)):
+            for i, t in enumerate(np.nditer(y)):
                 token_loss[t,0] += 1
                 token_loss[t,1] += res[1][i]
         if train_op.name != u'NoOp' and (step + 1) % opt.progress_steps == 0:
