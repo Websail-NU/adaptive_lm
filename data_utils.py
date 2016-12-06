@@ -181,7 +181,7 @@ class DataIterator(object):
         self._read_tokens = [0 for _ in range(batch_size)]
 
     def next_batch(self):
-        if any(t > self._epoch_tokens for t in self._read_tokens):
+        if any((t + 1) >= self._epoch_tokens for t in self._read_tokens):
             return None, None, None, None, None
         # reset old data
         self.x[:], self.y[:], self.w[:] = self._padding_id, self._padding_id, 0

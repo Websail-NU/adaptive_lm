@@ -35,9 +35,11 @@ def resume_if_possible(opt, sess, saver, state):
         logger.debug('- Restoring model variables...')
         saver.restore(sess, ckpt_path)
         logger.info('Resumed state:\n{}'.format(state.__repr__()))
+        return state, True
     else:
         logger.info('No state to resume...')
-    return state
+        return state, False
+
 
 def update_lr(opt, state):
     logger = logging.getLogger("exp")

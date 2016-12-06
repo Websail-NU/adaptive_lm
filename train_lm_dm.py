@@ -77,7 +77,7 @@ def main(opt_lm, opt_dm):
         saver = tf.train.Saver()
         state = common_utils.get_initial_training_state()
         state.learning_rate = opt_lm.learning_rate
-        state = resume_if_possible(opt_lm, sess, saver, state)
+        state, _ = resume_if_possible(opt_lm, sess, saver, state)
         logger.info('Start training loop:')
         logger.debug('\n' + common_utils.SUN_BRO())
 
