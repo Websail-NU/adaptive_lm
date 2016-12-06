@@ -21,7 +21,7 @@ import lm
 import common_utils
 import data_utils
 
-def resume_if_possible(opt, sess, saver, state):
+def resume_if_possible(opt, sess, saver, state, prefix="latest"):
     logger = logging.getLogger("exp")
     ckpt_path = os.path.join(opt.output_dir, "latest_model.ckpt")
     state_path = os.path.join(opt.output_dir, "latest_state.json")

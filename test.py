@@ -46,7 +46,8 @@ def main(opt):
         saver = tf.train.Saver()
         state = common_utils.get_initial_training_state()
         state.learning_rate = opt.learning_rate
-        state, success = resume_if_possible(opt, sess, saver, state)
+        state, success = resume_if_possible(opt, sess, saver, state,
+                                            prefix="best")
         if not success:
             logger.error('Failed to load the model. Testing aborted.')
             return
