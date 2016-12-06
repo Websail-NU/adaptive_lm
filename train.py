@@ -49,7 +49,7 @@ def main(opt):
             model = lm.LM(opt)
             train_op, lr_var = lm.train_op(model, model.opt)
         logger.debug('- Creating validating model (reuse params)...')
-        with tf.variable_scope('model', reuse=True, initializer=initializer):
+        with tf.variable_scope('LM', reuse=True, initializer=initializer):
             vmodel = lm.LM(opt, is_training=False)
         logger.debug('Trainable variables:')
         for v in tf.trainable_variables():
