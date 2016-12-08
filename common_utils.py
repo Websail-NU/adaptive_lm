@@ -24,6 +24,9 @@ class Bunch(object):
         """Works with argparse"""
         self.update_from_dict(vars(ns))
 
+    def is_set(self, attr):
+        return attr in self.__dict__
+
     def __str__(self):
         return str(self.__dict__)
 
