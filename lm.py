@@ -13,6 +13,10 @@ Todo:
 #  |_|
 #  | |
 
+def find_variables(top_scope, key):
+    return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                             "{}/.*{}.*".format(top_scope, key))
+
 def find_trainable_variables(top_scope, key):
     return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                              "{}/.*{}.*".format(top_scope, key))
@@ -244,11 +248,33 @@ class LMwAF(LM):
 
     def _extract_features(self, opt, l):
         # XXX: placeholder for later refactor
-        self._af_size = opt.emb_size
-        l = tf.nn.embedding_lookup(self._emb_vars, l)
-        if self.is_training and opt.emb_keep_prob < 1.0:
-            l = tf.nn.dropout(l, opt.emb_keep_prob)
+        af_function = 'lm_emb'
+        if opt.is_set('af_function'):
+            af_function = opt.af_function
 
+        if af_function == 'lm_emb':
+            self._af_size = opt.emb_size
+            l = tf.nn.embedding_lookup(self._emb_vars, l)
+        elif af_function == 'emb':
+            self._af_size = opt.af_emb_size
+            with tf.variable_scope("afeatures"):
+                initializer = tf.uniform_unit_scaling_initializer(
+                    dtype=tf.float32)
+                # use "lookup" to distinguish between LM embedding
+                af_train_emb = tf.get_variable(
+                    "af_train_lookup", [opt.af_emb_train_vocab_size,
+                                        opt.af_emb_size],
+                    initializer=initializer, dtype=tf.float32)
+                af_fixed_emb = tf.get_variable(
+                    "af_fix_lookup", [opt.af_emb_fix_vocab_size,
+                                      opt.af_emb_size],
+                    initializer=initializer, dtype=tf.float32, trainable=False)
+                self.af_emb_var = tf.concat(0, [af_train_emb, af_fixed_emb])
+                l = tf.nn.embedding_lookup(self.af_emb_var, l)
+
+        if 'emb' in af_function:
+                if self.is_training and opt.emb_keep_prob < 1.0:
+                    l = tf.nn.dropout(l, opt.emb_keep_prob)
         return l
 
     def _get_additional_variables(self):
