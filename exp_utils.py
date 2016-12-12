@@ -85,7 +85,7 @@ def transfer_emb(sess, s_scope, s_name, t_scope, t_name, shortlist, index_map):
     t_emb_vars = lm.find_variables(t_scope, t_name)
     s_embs = sess.run(s_emb_vars)
     t_embs = sess.run(t_emb_vars)
-    logger.debug('- Transfering parameters')
+    logger.info('- Transfering parameters')
     logger.debug('-- From {} ...'.format(
         ', '.join([v.name for v in s_emb_vars])))
     logger.debug('-- To {} ...'.format(

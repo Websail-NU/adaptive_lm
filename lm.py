@@ -261,17 +261,24 @@ class LMwAF(LM):
                 initializer = tf.uniform_unit_scaling_initializer(
                     dtype=tf.float32)
                 # use "lookup" to distinguish between LM embedding
-                af_train_emb = tf.get_variable(
-                    "af_train_lookup", [opt.af_emb_train_vocab_size,
-                                        opt.af_emb_size],
-                    initializer=initializer, dtype=tf.float32)
-                af_fixed_emb = tf.get_variable(
-                    "af_fix_lookup", [opt.af_emb_fix_vocab_size,
-                                      opt.af_emb_size],
-                    initializer=initializer, dtype=tf.float32, trainable=False)
-                self.af_emb_var = tf.concat(0, [af_train_emb, af_fixed_emb])
+                af_emb_vars = []
+                if opt.af_emb_train_vocab_size > 0:
+                    af_train_emb = tf.get_variable(
+                        "af_train_lookup", [opt.af_emb_train_vocab_size,
+                                            opt.af_emb_size],
+                        initializer=initializer, dtype=tf.float32)
+                    af_emb_vars.append(af_train_emb)
+                if opt.af_emb_fix_vocab_size > 0:
+                    af_fixed_emb = tf.get_variable(
+                        "af_fix_lookup", [opt.af_emb_fix_vocab_size,
+                                          opt.af_emb_size],
+                        initializer=initializer, dtype=tf.float32, trainable=False)
+                    af_emb_vars.append(af_fixed_emb)
+                if len(af_emb_vars) > 1:
+                    self.af_emb_var = tf.concat(0, af_emb_vars)
+                else:
+                    self.af_emb_var = af_emb_vars
                 l = tf.nn.embedding_lookup(self.af_emb_var, l)
-
         if 'emb' in af_function:
                 if self.is_training and opt.emb_keep_prob < 1.0:
                     l = tf.nn.dropout(l, opt.emb_keep_prob)
