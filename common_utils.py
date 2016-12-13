@@ -51,7 +51,7 @@ class Bunch(object):
             max_grad_norm=10.0,
             emb_keep_prob=0.9,
             keep_prob=0.75,
-            vocab_size=10001,
+            vocab_size=10000,
             emb_size=100,
             state_size=100,
             num_softmax_sampled=0,
