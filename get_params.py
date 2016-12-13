@@ -37,6 +37,7 @@ def main(opt):
         state = common_utils.get_initial_training_state()
         state.learning_rate = opt.learning_rate
         state, _ = resume_if_possible(opt, sess, saver, state, prefix="best")
+        logger.info('Writing vairables...')
         trainable_vars = tf.trainable_variables()
         trainable_vals = sess.run(trainable_vars)
         params = {}

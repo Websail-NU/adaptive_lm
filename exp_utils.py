@@ -28,7 +28,7 @@ def resume_if_possible(opt, sess, saver, state, prefix="latest"):
     logger.debug('Looking for checkpoint at {}'.format(ckpt_path))
     logger.debug('Looking for state at {}'.format(state_path))
     if os.path.exists(state_path):
-        logger.info('Found existing checkpoint, resume training')
+        logger.info('Found existing checkpoint, resume state')
         with open(state_path) as ifp:
             logger.debug('- Loading state...')
             state.update_from_dict(json.load(ifp))
