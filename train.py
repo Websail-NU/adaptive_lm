@@ -45,7 +45,7 @@ def main(opt):
             '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         logger.debug('- Creating training model...')
-        with tf.variable_scope('model', reuse=None, initializer=initializer):
+        with tf.variable_scope('LM', reuse=None, initializer=initializer):
             model = lm.LM(opt)
             train_op, lr_var = lm.train_op(model, model.opt)
         logger.debug('- Creating validating model (reuse params)...')
