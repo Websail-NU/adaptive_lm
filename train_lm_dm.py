@@ -22,34 +22,40 @@ def main(opt_lm, opt_dm):
     valid_lm_path = os.path.join(opt_lm.data_dir, opt_lm.valid_file)
     vocab_dm_path = os.path.join(opt_dm.data_dir, opt_dm.vocab_file)
     train_dm_path = os.path.join(opt_dm.data_dir, opt_dm.train_file)
-    shortlist_path = os.path.join(opt_dm.data_dir, "train_shortlist.txt")
+    vocab_wd_path = os.path.join(opt_dm.data_dir, opt_dm.wd_vocab_file)
+    shortlist_lm2wd_path = os.path.join(opt_dm.data_dir, opt_dm.shortlist_lm2wd)
+    shortlist_wd2lm_path = os.path.join(opt_dm.data_dir, opt_dm.shortlist_wd2lm)
     logger.info('Loading data set...')
     logger.debug('- Loading vocab LM from {}'.format(vocab_lm_path))
     vocab_lm = data_utils.Vocabulary.from_vocab_file(vocab_lm_path)
-    logger.debug('- LM vocab size: {}'.format(vocab_lm.vocab_size))
+    logger.debug('-- LM vocab size: {}'.format(vocab_lm.vocab_size))
     logger.debug('- Loading vocab DM from {}'.format(vocab_dm_path))
     vocab_dm = data_utils.Vocabulary.from_vocab_file(vocab_dm_path)
-    logger.debug('- DM vocab size: {}'.format(vocab_dm.vocab_size))
+    logger.debug('-- DM vocab size: {}'.format(vocab_dm.vocab_size))
+    logger.debug('- Loading vocab WD from {}'.format(vocab_wd_path))
+    vocab_wd = data_utils.Vocabulary.from_vocab_file(vocab_wd_path)
+    logger.debug('-- WD vocab size: {}'.format(vocab_wd.vocab_size))
     logger.debug('- Loading train LM data from {}'.format(train_lm_path))
     train_lm_iter = data_utils.DataIterator(vocab_lm, train_lm_path)
     logger.debug('- Loading valid LM data from {}'.format(valid_lm_path))
     valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path)
     logger.debug('- Loading train DM data from {}'.format(train_dm_path))
-    train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path)
+    train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path,
+                                           l_vocab=vocab_wd)
     opt_dm.num_steps = train_dm_iter._max_seq_len
-    logger.debug('- Loading shortlist ID from {}'.format(shortlist_path))
-    shortlist_lm = data_utils.Vocabulary.list_ids_from_file(
-        shortlist_path, vocab_lm)
-    shortlist_dm = data_utils.Vocabulary.list_ids_from_file(
-        shortlist_path, vocab_dm)
-    lm2dm, dm2lm = data_utils.Vocabulary.vocab_index_map(vocab_lm, vocab_dm)
+    logger.debug('- Loading shortlist ID from {}'.format(shortlist_lm2wd_path))
+    shortlist_lm2wd = data_utils.Vocabulary.list_ids_from_file(
+        shortlist_lm2wd_path, vocab_lm)
+    logger.debug('- LM2WD voacb size: {}'.format(len(shortlist_lm2wd)))
+    logger.debug('- Loading shortlist ID from {}'.format(shortlist_wd2lm_path))
+    shortlist_wd2lm = data_utils.Vocabulary.list_ids_from_file(
+        shortlist_wd2lm_path, vocab_wd)
+    logger.debug('- WD2LM voacb size: {}'.format(len(shortlist_wd2lm)))
+    lm2wd, wd2lm = data_utils.Vocabulary.vocab_index_map(vocab_lm, vocab_wd)
     opt_lm.vocab_size = vocab_lm.vocab_size
     opt_dm.vocab_size = vocab_dm.vocab_size
     init_scale = opt_lm.init_scale
     logger.info('Loading data completed')
-    logger.debug('- LM voacb size: {}'.format(vocab_lm.vocab_size))
-    logger.debug('- DM voacb size: {}'.format(vocab_dm.vocab_size))
-    logger.debug('- Shared voacb size: {}'.format(len(shortlist_lm)))
 
     sess_config =tf.ConfigProto(log_device_placement=False)
     logger.info('Start TF Session')
@@ -80,10 +86,8 @@ def main(opt_lm, opt_dm):
         state, _ = resume_if_possible(opt_lm, sess, saver, state)
         logger.info('Start training loop:')
         logger.debug('\n' + common_utils.SUN_BRO())
-
         for epoch in range(state.epoch, opt_lm.max_epochs):
             epoch_time = time.time()
-            state.epoch = epoch
             logger.info("========= Start epoch {} =========".format(epoch+1))
             sess.run(tf.assign(lr_lm_var, state.learning_rate))
             sess.run(tf.assign(lr_dm_var, state.learning_rate))
@@ -91,12 +95,14 @@ def main(opt_lm, opt_dm):
             logger.debug("- Leanring rate (variable) = {}".format(
                 sess.run(lr_lm_var)))
             train_dm_ppl = 0
-            if opt_dm.train_dm:
+            if opt_dm.train_dm and epoch > 0:
+                transfer_emb(sess, "LM", "emb",
+                             "DM", "lookup", shortlist_lm2wd, lm2wd)
                 logger.info("Traning DM...")
-                transfer_emb(sess, "LM", "DM", shortlist_lm, lm2dm)
                 train_dm_ppl, dsteps = run_epoch(sess, train_dm, train_dm_iter,
                                                  opt_dm, train_dm_op)
-                transfer_emb(sess, "DM", "LM", shortlist_dm, dm2lm)
+                transfer_emb(sess, "DM", "lookup",
+                             "LM", "emb", shortlist_wd2lm, wd2lm)
             logger.info("Traning LM...")
             train_lm_ppl, lsteps = run_epoch(sess, train_lm, train_lm_iter,
                                              opt_lm, train_lm_op)
@@ -107,6 +113,7 @@ def main(opt_lm, opt_dm):
             # print('{}\t{}\t{}\t{}'.format(
             #     epoch+1, train_dm_ppl, train_lm_ppl, valid_lm_ppl))
             logger.info('Post epoch routine...')
+            state.epoch = epoch + 1
             state.val_ppl = valid_lm_ppl
             if valid_lm_ppl < state.best_val_ppl:
                 logger.info('- Best PPL: {} -> {}'.format(
@@ -147,6 +154,27 @@ if __name__ == "__main__":
     parser.set_defaults(train_dm=False)
     parser.add_argument('--af_mode', type=str, default='gated_state',
                         help='additional feature module type')
+    parser.add_argument('--af_function', type=str, default='emb',
+                        help='function that transform feature index to vector')
+    parser.add_argument('--af_emb_size', type=int, default=100,
+                        help='size of embeddings when af_function=emb')
+    parser.add_argument('--af_emb_fix_vocab_size', type=int, default=2367,
+                        help=('size of not trainable embeddings. '
+                              'Vocab index starts at 0'))
+    parser.add_argument('--af_emb_train_vocab_size', type=int, default=2237,
+                        help=('size of trainable embeddings. '
+                              'Vocab index starts after the fixed vocab size'))
+    parser.add_argument('--wd_vocab_file', type=str,
+                        default='ptb_rare/shortlist_vocab.txt',
+                        help=('Vocab file for words being defined'))
+    parser.add_argument('--shortlist_lm2wd', type=str,
+                        default='train_shortlist.txt',
+                        help=('Shortlist file for transfering embeddings'
+                              'from LM to DM'))
+    parser.add_argument('--shortlist_wd2lm', type=str,
+                        default='ptb_rare/learn_shortlist.txt',
+                        help=('Shortlist file for transfering embeddings'
+                              'from LM to DM'))
     args = parser.parse_args()
     opt_lm = common_utils.Bunch.default_model_options()
     opt_lm.update_from_ns(args)

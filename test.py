@@ -36,7 +36,7 @@ def main(opt):
             '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         logger.debug('- Creating a model...')
-        with tf.variable_scope('model', reuse=None, initializer=initializer):
+        with tf.variable_scope('LM', reuse=None, initializer=initializer):
             model = lm.LM(opt, is_training=False)
         logger.debug('Trainable variables:')
         for v in tf.trainable_variables():
@@ -46,7 +46,8 @@ def main(opt):
         saver = tf.train.Saver()
         state = common_utils.get_initial_training_state()
         state.learning_rate = opt.learning_rate
-        state, success = resume_if_possible(opt, sess, saver, state)
+        state, success = resume_if_possible(opt, sess, saver, state,
+                                            prefix="best")
         if not success:
             logger.error('Failed to load the model. Testing aborted.')
             return
@@ -66,7 +67,8 @@ def main(opt):
                     t_ppl = 0
                     if token_loss[i, 0] > 0:
                         t_ppl = np.exp(token_loss[i, 1] / token_loss[i, 0])
-                    ofp.write("{}\t{}\n".format(vocab.i2w(i), t_ppl))
+                    ofp.write("{}\t{}\t{}\n".format(
+                        vocab.i2w(i), token_loss[i, 0], t_ppl))
 
 if __name__ == "__main__":
     global_time = time.time()

@@ -24,6 +24,9 @@ class Bunch(object):
         """Works with argparse"""
         self.update_from_dict(vars(ns))
 
+    def is_set(self, attr):
+        return attr in self.__dict__
+
     def __str__(self):
         return str(self.__dict__)
 
@@ -48,7 +51,7 @@ class Bunch(object):
             max_grad_norm=10.0,
             emb_keep_prob=0.9,
             keep_prob=0.75,
-            vocab_size=10001,
+            vocab_size=10000,
             emb_size=100,
             state_size=100,
             num_softmax_sampled=0,
@@ -155,7 +158,7 @@ def get_common_argparse():
                               '(always reset state every epoch).'))
     parser.set_defaults(reset_state=False)
     # Parameters for gradient descent.
-    parser.add_argument('--max_grad_norm', type=float, default=10.,
+    parser.add_argument('--max_grad_norm', type=float, default=5.,
                         help='clip global grad norm')
     parser.add_argument('--learning_rate', type=float, default=0.5,
                         help='initial learning rate')

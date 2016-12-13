@@ -21,14 +21,14 @@ import lm
 import common_utils
 import data_utils
 
-def resume_if_possible(opt, sess, saver, state):
+def resume_if_possible(opt, sess, saver, state, prefix="latest"):
     logger = logging.getLogger("exp")
     ckpt_path = os.path.join(opt.output_dir, "latest_model.ckpt")
     state_path = os.path.join(opt.output_dir, "latest_state.json")
     logger.debug('Looking for checkpoint at {}'.format(ckpt_path))
     logger.debug('Looking for state at {}'.format(state_path))
     if os.path.exists(state_path):
-        logger.info('Found existing checkpoint, resume training')
+        logger.info('Found existing checkpoint, resume state')
         with open(state_path) as ifp:
             logger.debug('- Loading state...')
             state.update_from_dict(json.load(ifp))
@@ -79,14 +79,29 @@ def update_lr(opt, state):
         return True
     return False
 
-def transfer_emb(sess, source, target, shortlist, index_map):
+def transfer_emb(sess, s_scope, s_name, t_scope, t_name, shortlist, index_map):
     logger = logging.getLogger("exp")
-    s_emb_var = lm.find_trainable_variables(source, "emb")[0]
-    t_emb_var = lm.find_trainable_variables(target, "emb")[0]
-    s_emb, t_emb = sess.run([s_emb_var, t_emb_var])
+    s_emb_vars = lm.find_variables(s_scope, s_name)
+    t_emb_vars = lm.find_variables(t_scope, t_name)
+    s_embs = sess.run(s_emb_vars)
+    t_embs = sess.run(t_emb_vars)
+    logger.info('- Transfering parameters')
+    logger.debug('-- From {} ...'.format(
+        ', '.join([v.name for v in s_emb_vars])))
+    logger.debug('-- To {} ...'.format(
+        ', '.join([v.name for v in t_emb_vars])))
+    c = 0
     for k in shortlist:
-        t_emb[index_map[k]] = s_emb[k]
-    sess.run(tf.assign(t_emb_var, t_emb))
+        t_k = index_map[k]
+        t_i = 0
+        if t_k >= len(t_embs[0]):
+            t_i = 1
+            t_k = t_k - len(t_embs[0])
+        t_embs[t_i][t_k] = s_embs[0][k]
+        c = c+1
+    logger.debug('-- Completed, total rows: {}'.format(c))
+    for i in range(len(t_embs)):
+        sess.run(tf.assign(t_emb_vars[i], t_embs[i]))
 
 def run_epoch(sess, m, data_iter, opt,
               train_op=tf.no_op(), token_loss=None):
@@ -123,7 +138,7 @@ def run_epoch(sess, m, data_iter, opt,
         costs += cost
         num_words += np.sum(w)
         if token_loss is not None:
-            for t in enumerate(np.nditer(y)):
+            for i, t in enumerate(np.nditer(y)):
                 token_loss[t,0] += 1
                 token_loss[t,1] += res[1][i]
         if train_op.name != u'NoOp' and (step + 1) % opt.progress_steps == 0:

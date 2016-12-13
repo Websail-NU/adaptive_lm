@@ -102,8 +102,12 @@ class Vocabulary(object):
         vocab = Vocabulary()
         with codecs.open(filepath, 'r', 'utf-8') as ifp:
             for line in ifp:
-                word, count = line.strip().split()
-                vocab.add(word, int(count))
+                parts = line.strip().split()
+                count = 0
+                word = parts[0]
+                if len(parts) > 1:
+                    count = int(parts[1])
+                vocab.add(word, count)
         vocab.finalize()
         return vocab
 
@@ -127,13 +131,13 @@ class Vocabulary(object):
         return l
 
 class DataIterator(object):
-    def __init__(self, vocab=None, file_path=None):
+    def __init__(self, vocab=None, file_path=None, **kwargs):
+        self._kwargs = kwargs
         if vocab is not None:
             self._vocab = vocab
             self._padding_id = vocab.eos_id
             self._data, self._lidx, self._lkeys, self._max_seq_len \
             = self._parse_file(file_path)
-
 
     def _parse_sentence(self, sentence):
         indexes = [self._vocab.w2i(word) for word in sentence.split()]
@@ -221,11 +225,14 @@ class DefIterator(DataIterator):
         label_idx = []
         label_keys = []
         max_seq_len = 0
+        l_vocab = self._vocab
+        if 'l_vocab' in self._kwargs:
+            l_vocab = self._kwargs['l_vocab']
         with open(filepath) as ifp:
             for line in ifp:
                 doc = json.loads(line)
                 label_idx.append(len(data))
-                label_keys.append(self._vocab.w2i(doc['key']))
+                label_keys.append(l_vocab.w2i(doc['key']))
                 seq_len = 0
                 for s in doc['lines']:
                     line = self._parse_sentence(s)
