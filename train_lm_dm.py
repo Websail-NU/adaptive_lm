@@ -95,7 +95,7 @@ def main(opt_lm, opt_dm):
             logger.debug("- Leanring rate (variable) = {}".format(
                 sess.run(lr_lm_var)))
             train_dm_ppl = 0
-            if opt_dm.train_dm and epoch > 0:
+            if opt_dm.train_dm and epoch >= opt_dm.lm_burnin:
                 transfer_emb(sess, "LM", "emb",
                              "DM", "lookup", shortlist_lm2wd, lm2wd)
                 logger.info("Traning DM...")
@@ -175,6 +175,8 @@ if __name__ == "__main__":
                         default='ptb_rare/learn_shortlist.txt',
                         help=('Shortlist file for transfering embeddings'
                               'from LM to DM'))
+    parser.add_argument('--lm_burnin', type=int, default=1,
+                        help=('Number of epoch to run LM before starting LM. '))
     args = parser.parse_args()
     opt_lm = common_utils.Bunch.default_model_options()
     opt_lm.update_from_ns(args)
