@@ -164,6 +164,9 @@ class DataIterator(object):
         data = np.array(data, np.int32)
         return data, label_idx, label_keys, max_seq_len
 
+    def _find_label(self, data_pointer):
+        return self._lkeys[bisect_right(self._lidx, data_pointer) - 1]
+
     def init_batch(self, batch_size, num_steps):
         if num_steps < 1:
             warnings.warn("num_steps has to be more than 0.")
@@ -201,7 +204,7 @@ class DataIterator(object):
             self.y[i, :num_tokens] = self._data[p + 1: p + num_tokens + 1]
             self.w[i, :num_tokens] = 1
             for j in range(num_tokens):
-                self.l[i][j] = self._lkeys[bisect_right(self._lidx, p + j) - 1]
+                self.l[i][j] = self._find_label(p + j)
             # increment pointers
             self._pointers[i] = p + num_tokens
             self._read_tokens[i] += num_tokens
@@ -215,10 +218,30 @@ class DataIterator(object):
                 break
             yield x, y, w, l, seq_len
 
+class TokenFeatureIterator(DataIterator):
+    """
+    Overwrite the labels of DataIterator with token features
+
+    kwargs:
+        * t_feature_idx:
+            index from token id -> start feature index
+            (stop at next token id)
+        * t_features: numpy array of features
+    """
+    def _parse_file(self, filepath):
+        data, label_idx, label_keys, max_seq_len =\
+        super(TokenFeatureIterator,self)._parse_file(filepath)
+        return data, label_idx, label_keys, max_seq_len
+
 class DefIterator(DataIterator):
-    # def _parse_sentence(self, sentence):
-    #     indexes = [self._vocab.w2i(word) for word in sentence.split()]
-    #     return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
+    """
+    Iterate over a set of independent sentences.
+    The data will be padded to have equal lenght and
+    The labels will be mapped to IDs using label vocab
+
+    kwargs:
+        * l_vocab: a Vocabulary object
+    """
 
     def _parse_file(self, filepath):
         data = []
@@ -320,3 +343,37 @@ def serialize_corpus(data_dir, split=['train', 'valid', 'test']):
         serialize_iterator(os.path.join(data_dir, '{}.jsonl'.format(s)),
                    os.path.join(data_dir, 'vocab.txt'),
                    os.path.join(data_dir, '{}_iter.pickle'.format(s)))
+
+def map_vocab_defs(vocab_filepath, def_prep_dir, out_filepath):
+    vocab_t = Vocabulary.from_vocab_file(vocab_filepath)
+    vocab_d = Vocabulary.from_vocab_file(
+        os.path.join(def_prep_dir, 'vocab.txt'))
+    definitions = {}
+    max_len = 0
+    lines = 0
+    with open(os.path.join(def_prep_dir, 'train.jsonl')) as ifp:
+        for line in ifp:
+            lines += 1
+            e = json.loads(line)
+            word = e['meta']['word']
+            defi = e['lines'][0].split()
+            if word not in definitions:
+                definitions[word] = []
+            definitions[word].append(defi)
+            if len(defi) > max_len:
+                max_len = len(defi)
+    data = np.zeros([lines + 1, max_len], np.int32)
+    data[:] = vocab_d.eos_id
+    index = np.zeros([vocab_t.vocab_size + 1], np.int32)
+    for i in range(vocab_t.vocab_size):
+        w = vocab_t.i2w(i)
+        if w in definitions:
+            defs = definitions[w]
+            index[i+1] = index[i] + len(defs)
+            for j in range(len(defs)):
+                for k, t in enumerate(defs[j]):
+                    data[index[i] + j, k] = vocab_d.w2i(defs[j][k])
+        else:
+            index[i+1] = index[i]
+    with open(out_filepath, 'w') as ofp:
+        cPickle.dump((index, data), ofp)
