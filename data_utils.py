@@ -14,6 +14,10 @@ import cPickle
 import random
 from bisect import bisect_right
 
+######################################################
+# Vocabulary
+######################################################
+
 class Vocabulary(object):
     """
     A mapping between words and indexes. The code is adapted from
@@ -130,6 +134,10 @@ class Vocabulary(object):
                 l.append(vocab.w2i(word))
         return l
 
+######################################################
+# DataIterator
+######################################################
+
 class DataIterator(object):
     def __init__(self, vocab=None, file_path=None, **kwargs):
         self._kwargs = kwargs
@@ -218,6 +226,10 @@ class DataIterator(object):
                 break
             yield x, y, w, l, seq_len
 
+######################################################
+# TokenFeatureIterator
+######################################################
+
 class TokenFeatureIterator(DataIterator):
     """
     Overwrite the labels of DataIterator with token features
@@ -233,9 +245,14 @@ class TokenFeatureIterator(DataIterator):
         super(TokenFeatureIterator,self)._parse_file(filepath)
         self._t_f_idx = None
         self._t_f = None
+        self.f_x, self.f_y, self.f_w, self.f_l, self.f_seq_len =\
+        None, None, None, None, None
+        self._cur_feature_pointers = []
+        self._cur_fdata_pointers = []
         if 't_feature_idx' in self._kwargs:
             self._t_f_idx = self._kwargs['t_feature_idx']
             self._t_f = self._kwargs['t_features']
+            self.feature_size = self._t_f.shape[1]
         return data, label_idx, label_keys, max_seq_len
 
     def _find_label(self, data_pointer):
@@ -249,7 +266,49 @@ class TokenFeatureIterator(DataIterator):
             if start == end:
                 return self._t_f[-1, :]
             else:
+                self._cur_feature_pointers += range(start, end)
+                self._cur_fdata_pointers += \
+                [self._data[data_pointer]] * (end - start)
                 return self._t_f[start:end, :]
+
+    def cur_features_batch(self, num_samples):
+        """
+        Sample rows in self.l from current batch
+        and create a batch for training
+        """
+        if self.f_x is None or self.f_x.shape[0] != num_samples:
+            self.f_x = np.zeros([num_samples, self.feature_size], np.int32)
+            self.f_y = np.zeros([num_samples, self.feature_size], np.int32)
+            self.f_w = np.zeros([num_samples, self.feature_size], np.int32)
+            self.f_l = np.zeros([num_samples, self.feature_size], np.int32)
+            self.f_seq_len = np.zeros(num_samples, np.int32)
+        if len(self._cur_feature_pointers) == 0:
+            return self.f_x, self.f_y, self.f_w, self.f_l, self.f_seq_len
+        f_padding_id = self._t_f[-1,0]
+        self.f_x[:] = f_padding_id
+        self.f_y[:] = f_padding_id
+        self.f_l[:] = self._padding_id
+        f_map = dict(zip(self._cur_feature_pointers,
+                         self._cur_fdata_pointers))
+        # XXX: sample w* with more definitions
+        f_idx = np.random.permutation(np.unique(self._cur_feature_pointers))
+        if len(f_idx) > num_samples:
+            f_idx = f_idx[0: num_samples]
+            self.f_x[:] = self._t_f[f_idx,:]
+        if len(f_idx) < num_samples:
+            self.f_x[0:len(f_idx),:] = self._t_f[f_idx,:]
+        for i, idx in enumerate(f_idx):
+            self.f_l[i,:] = f_map[idx]
+        self.f_seq_len = np.sum(self.f_x!=f_padding_id, axis=1) + 1
+        self.f_y[:, 0:-1] = self.f_x[:, 1:]
+        for i in range(num_samples):
+            self.f_w[i, 1:self.f_seq_len[i]-1] = 1
+        return self.f_x, self.f_y, self.f_w, self.f_l, self.f_seq_len
+
+
+######################################################
+# DefIterator
+######################################################
 
 class DefIterator(DataIterator):
     """
@@ -329,10 +388,14 @@ class DefIterator(DataIterator):
             return None, None, None, None, None
         self.y[:, -1] = self._padding_id
         self.w[:] = 0
-        self.seq_len = np.sum(self.y!=self._padding_id, axis=1) + 1
+        self.seq_len = np.sum(self.x!=self._padding_id, axis=1) + 1
         for i in range(self._batch_size):
-            self.w[i, 1:self.seq_len[i]] = 1
+            self.w[i, 1:self.seq_len[i]-1] = 1
         return self.x, self.y, self.w, self.l, self.seq_len
+
+######################################################
+# Module Functions
+######################################################
 
 def serialize_iterator(data_filepath, vocab_filepath, out_filepath):
     vocab = Vocabulary.from_vocab_file(vocab_filepath)
