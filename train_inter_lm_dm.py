@@ -176,7 +176,7 @@ if __name__ == "__main__":
                         help=('Shortlist file for transfering embeddings'
                               'from LM to DM'))
     parser.add_argument('--lm_burnin', type=int, default=1,
-                        help=('Number of epoch to run LM before starting LM. '))
+                        help=('Number of epochs to run LM before starting DM. '))
     args = parser.parse_args()
     opt_lm = common_utils.Bunch.default_model_options()
     opt_lm.update_from_ns(args)

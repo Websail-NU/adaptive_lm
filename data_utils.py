@@ -303,6 +303,8 @@ class TokenFeatureIterator(DataIterator):
         self.f_y[:, 0:-1] = self.f_x[:, 1:]
         for i in range(num_samples):
             self.f_w[i, 1:self.f_seq_len[i]-1] = 1
+            if self.f_seq_len[i] == 1:
+                self.f_seq_len[i] = 0
         return self.f_x, self.f_y, self.f_w, self.f_l, self.f_seq_len
 
 
