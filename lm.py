@@ -5,8 +5,8 @@ import tensorflow as tf
 Todo:
     - Choosing optimizer from options
     - Support other types of cells
-    - Refactor LMwAF
-    - Support gated_state in LMwAF
+    - Refactor LMwAF._extract_features
+    - Add char-CNN
 """
 
 # \[T]/ PRAISE THE SUN!
@@ -38,6 +38,7 @@ def train_op(model, opt):
     global_step = tf.get_variable("global_step", [], tf.float32,
                                   initializer=tf.zeros_initializer,
                                   trainable=False)
+    # TODO: Support other optimizer
     optimizer = tf.train.GradientDescentOptimizer(lr)
     train_op = optimizer.apply_gradients(
         zip(model.grads, model.vars),
@@ -77,8 +78,7 @@ class LM(object):
         """ Create forward graph. """
         w = tf.to_float(w)
         # Embedding
-        self._emb_vars = sharded_variable(
-            "emb", [opt.vocab_size, opt.emb_size], opt.num_shards)
+        self._emb_vars = self._input_emb(opt)
         # Input
         self._inputs = self._input_graph(opt, self._emb_vars, x)
         # RNN
@@ -91,6 +91,17 @@ class LM(object):
         loss, self._all_losses = self._softmax_loss_graph(
             opt, softmax_size, self._rnn_output, y, w)
         return loss
+
+    def _input_emb(self, opt):
+        """ Create embedding variable or reuse set at opt.input_emb_vars
+        """
+        emb_vars = None
+        if hasattr(opt, 'input_emb_vars'):
+            emb_vars = opt.input_emb_vars
+        else:
+            emb_vars = sharded_variable(
+                "emb", [opt.vocab_size, opt.emb_size], opt.num_shards)
+        return emb_vars
 
     def _input_graph(self, opt, emb_vars, x):
         """ Create input graph before the RNN """
@@ -107,7 +118,7 @@ class LM(object):
     def _rnn_graph(self, opt, inputs):
         """ Create RNN graph """
         with tf.variable_scope("rnn") as vs:
-            # XXX: Support other types of cells
+            # TODO: Support other types of cells
             cell = tf.nn.rnn_cell.BasicLSTMCell(opt.state_size)
             if self.is_training and opt.keep_prob < 1.0:
                 cell = tf.nn.rnn_cell.DropoutWrapper(
@@ -247,16 +258,16 @@ class LMwAF(LM):
         return outputs, opt.state_size
 
     def _extract_features(self, opt, l):
-        # XXX: placeholder for later refactor
+        # TODO: placeholder for later refactor
         af_function = 'lm_emb'
         if opt.is_set('af_function'):
             af_function = opt.af_function
 
         if af_function == 'lm_emb':
-            self._af_size = opt.emb_size
             l = tf.nn.embedding_lookup(self._emb_vars, l)
+        elif af_function == 'ex_emb':
+            l = tf.nn.embedding_lookup(opt.af_ex_emb_vars, l)
         elif af_function == 'emb':
-            self._af_size = opt.af_emb_size
             with tf.variable_scope("afeatures"):
                 initializer = tf.uniform_unit_scaling_initializer(
                     dtype=tf.float32)
@@ -279,9 +290,11 @@ class LMwAF(LM):
                 else:
                     self.af_emb_var = af_emb_vars
                 l = tf.nn.embedding_lookup(self.af_emb_var, l)
+        self._af_size = l.get_shape()[2].value
         if 'emb' in af_function:
                 if self.is_training and opt.emb_keep_prob < 1.0:
                     l = tf.nn.dropout(l, opt.emb_keep_prob)
+        # TODO: add char-CNN
         return l
 
     def _get_additional_variables(self):

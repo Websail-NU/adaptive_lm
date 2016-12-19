@@ -231,7 +231,25 @@ class TokenFeatureIterator(DataIterator):
     def _parse_file(self, filepath):
         data, label_idx, label_keys, max_seq_len =\
         super(TokenFeatureIterator,self)._parse_file(filepath)
+        self._t_f_idx = None
+        self._t_f = None
+        if 't_feature_idx' in self._kwargs:
+            self._t_f_idx = self._kwargs['t_feature_idx']
+            self._t_f = self._kwargs['t_features']
         return data, label_idx, label_keys, max_seq_len
+
+    def _find_label(self, data_pointer):
+        if self._t_f_idx is None:
+            return super(TokenFeatureIterator, self)._lkeys[
+                bisect_right(self._lidx, data_pointer) - 1]
+        else:
+            data = self._data[data_pointer]
+            start = self._t_f_idx[data]
+            end = self._t_f_idx[data+1]
+            if start == end:
+                return self._t_f[-1, :]
+            else:
+                return self._t_f[start:end, :]
 
 class DefIterator(DataIterator):
     """
