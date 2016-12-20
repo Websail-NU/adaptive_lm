@@ -20,7 +20,8 @@ from exp_utils import *
 def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
     with tf.variable_scope('joint_training_ops'):
         loss_lm = train_lm.loss * opt_lm.num_steps
-        loss_dm = train_dm.loss * (opt_dm.num_steps * 0.3)
+        # XXX: change 0.05 into an argument or even better a decaying variable
+        loss_dm = train_dm.loss * (opt_dm.num_steps * 0.05)
         joint_loss = loss_lm + loss_dm
         train_vars = tf.trainable_variables()
         grads = tf.gradients(joint_loss, train_vars)

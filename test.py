@@ -39,7 +39,7 @@ def main(opt):
         if opt.shared_emb:
             shared_emb_vars = lm.sharded_variable(
                 'emb', [opt.vocab_size, opt.emb_size], opt.num_shards)
-            opt_lm.input_emb_vars = shared_emb_vars
+            opt.input_emb_vars = shared_emb_vars
         with tf.variable_scope('LM', reuse=None, initializer=initializer):
             model = lm.LM(opt, is_training=False)
         logger.debug('Trainable variables:')
