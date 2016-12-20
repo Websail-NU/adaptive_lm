@@ -305,6 +305,8 @@ class TokenFeatureIterator(DataIterator):
             self.f_w[i, 1:self.f_seq_len[i]-1] = 1
             if self.f_seq_len[i] == 1:
                 self.f_seq_len[i] = 0
+        self._cur_feature_pointers = []
+        self._cur_fdata_pointers = []
         return self.f_x, self.f_y, self.f_w, self.f_l, self.f_seq_len
 
 
