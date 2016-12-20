@@ -115,7 +115,7 @@ def main(opt_lm, opt_dm):
     init_scale = opt_lm.init_scale
     sess_config =tf.ConfigProto(log_device_placement=False)
     logger.info('Starting TF Session...')
-    with tf.device('/cpu:0'), tf.Session(config=sess_config) as sess:
+    with tf.Session(config=sess_config) as sess:
         logger.debug(
                 '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
