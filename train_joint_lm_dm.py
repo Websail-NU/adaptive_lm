@@ -81,7 +81,7 @@ def run_joint_epoch(sess, train_lm, train_dm, data_iter, opt, train_op):
                     step + 1, np.exp(cost_lm / (step + 1)),
                     np.exp(cost_dm / (step + 1)),
                     (num_words_lm + num_words_dm) / (time.time() - start_time)))
-        return np.exp(cost_lm / (step+1)), step
+    return np.exp(cost_lm / (step+1)), step
 
 def main(opt_lm, opt_dm):
     vocab_lm_path = os.path.join(opt_lm.data_dir, opt_lm.vocab_file)
