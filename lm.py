@@ -47,8 +47,9 @@ def train_op(model, opt):
 
 class LM(object):
 
-    def __init__(self, opt, is_training=True):
+    def __init__(self, opt, is_training=True, create_grads=True):
         self.is_training = is_training
+        self.create_grads = create_grads
         self.opt = opt
         self._create_input_placeholder(opt)
         self._top_scope = tf.get_variable_scope().name
@@ -71,7 +72,7 @@ class LM(object):
             The method creates loss and grads for running and training.
         """
         self.loss = self._forward(opt, self.x, self.y, self.w)
-        if self.is_training:
+        if self.is_training and self.create_grads:
             self.grads, self.vars = self._backward(opt, self.loss)
 
     def _forward(self, opt, x, y, w):
