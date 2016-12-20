@@ -37,9 +37,10 @@ def main(opt):
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         logger.debug('- Creating a model...')
         if opt.shared_emb:
-            shared_emb_vars = lm.sharded_variable(
-                'emb', [opt.vocab_size, opt.emb_size], opt.num_shards)
-            opt.input_emb_vars = shared_emb_vars
+            with tf.variable_scope('shared_emb'):
+                shared_emb_vars = lm.sharded_variable(
+                    'emb', [opt.vocab_size, opt.emb_size], opt.num_shards)
+                opt.input_emb_vars = shared_emb_vars
         with tf.variable_scope('LM', reuse=None, initializer=initializer):
             model = lm.LM(opt, is_training=False)
         logger.debug('Trainable variables:')
