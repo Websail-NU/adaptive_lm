@@ -163,6 +163,9 @@ def main(opt_lm, opt_dm):
             logger.info("Validating LM...")
             valid_lm_ppl, vsteps = run_epoch(sess, valid_lm,
                                              valid_lm_iter, opt_lm)
+            logger.info('Train ppl = {}, Valid ppl = {}'.format(
+                        train_lm_ppl, valid_lm_ppl))
+            logger.info('----------------------------------')
             logger.info('Post epoch routine...')
             state.epoch = epoch + 1
             state.val_ppl = valid_lm_ppl

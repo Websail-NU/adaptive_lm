@@ -36,6 +36,10 @@ def main(opt):
             '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         logger.debug('- Creating a model...')
+        if opt.shared_emb:
+            shared_emb_vars = lm.sharded_variable(
+                'emb', [opt.vocab_size, opt.emb_size], opt.num_shards)
+            opt_lm.input_emb_vars = shared_emb_vars
         with tf.variable_scope('LM', reuse=None, initializer=initializer):
             model = lm.LM(opt, is_training=False)
         logger.debug('Trainable variables:')
@@ -76,6 +80,9 @@ if __name__ == "__main__":
     parser.add_argument('--vocab_ppl_file', type=str,
                         default=None,
                         help='output vocab ppl to a file')
+    parser.add_argument('--shared_emb', dest='shared_emb',
+                        action='store_true', help='use emb from shared_emb scope')
+    parser.set_defaults(shared_emb=False)
     args = parser.parse_args()
     opt = common_utils.Bunch.default_model_options()
     opt.update_from_ns(args)
