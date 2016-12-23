@@ -17,11 +17,16 @@ import common_utils
 import data_utils
 from exp_utils import *
 
+def get_loss_summary_op(sess, train_lm, train_dm):
+    tf.scalar_summary('lm_loss', train_lm.loss)
+    tf.scalar_summary('dm_loss', train_dm.loss)
+    summary_writer = tf.summary.FileWriter('tf.log', sess.graph)
+    return tf.merge_all_summaries(), summary_writer
+
 def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
     with tf.variable_scope('joint_training_ops'):
         loss_lm = train_lm.loss * opt_lm.num_steps
-        # XXX: change 0.05 into an argument or even better a decaying variable
-        loss_dm = train_dm.loss * (opt_dm.num_steps * 0.05)
+        loss_dm = train_dm.loss * (opt_dm.num_steps * opt_lm.dm_loss_weight)
         joint_loss = loss_lm + loss_dm
         train_vars = tf.trainable_variables()
         grads = tf.gradients(joint_loss, train_vars)
@@ -39,7 +44,9 @@ def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
             global_step=global_step)
         return train_op, lr
 
-def run_joint_epoch(sess, train_lm, train_dm, lm_iter, dm_iter, opt, train_op):
+def run_joint_epoch(sess, train_lm, train_dm,
+                    lm_iter, dm_iter, opt, train_op,
+                    summary_writer, summary_op, global_steps):
     start_time = time.time()
     dm_iter.init_batch(train_dm.opt.batch_size)
     cost_lm = 0.0
@@ -62,7 +69,7 @@ def run_joint_epoch(sess, train_lm, train_dm, lm_iter, dm_iter, opt, train_op):
                      train_lm.w: w, train_lm.seq_len: seq_len,
                      train_dm.x: def_x, train_dm.y: def_y, train_dm.l: def_l,
                      train_dm.w: def_w, train_dm.seq_len: def_seq_len}
-        fetches = [train_lm.loss, train_dm.loss, train_op]
+        fetches = [train_lm.loss, train_dm.loss, train_op, summary_op]
         for c, h in train_lm.final_state:
             fetches.append(c)
             fetches.append(h)
@@ -74,17 +81,19 @@ def run_joint_epoch(sess, train_lm, train_dm, lm_iter, dm_iter, opt, train_op):
         for i, (c, h) in enumerate(train_dm.initial_state):
             feed_dict[c], feed_dict[h] = state_dm[i]
         res = sess.run(fetches, feed_dict)
-        state_flat = res[3:3+2*train_lm.opt.num_layers]
+        state_flat = res[4:3+2*train_lm.opt.num_layers]
         state_lm = [state_flat[i:i+2] for i in range(0, len(state_flat), 2)]
         cost_lm += res[0]
         cost_dm += res[1]
         num_words_lm += np.sum(w)
         num_words_dm += np.sum(def_w)
+
         if (step + 1) % opt.progress_steps == 0:
             logger.info("-- @{} LM PPL: {}, DM PPL: {}, joint wps: {}".format(
                     step + 1, np.exp(cost_lm / (step + 1)),
                     np.exp(cost_dm / (step + 1)),
                     (num_words_lm + num_words_dm) / (time.time() - start_time)))
+        summary_writer.add_summary(res[3], global_steps + step)
     return np.exp(cost_lm / (step+1)), np.exp(cost_dm / (step + 1)), step
 
 def main(opt_lm, opt_dm):
@@ -148,10 +157,10 @@ def main(opt_lm, opt_dm):
         state = common_utils.get_initial_training_state()
         state.learning_rate = opt_lm.learning_rate
         state, _ = resume_if_possible(opt_lm, sess, saver, state)
+        summary_op, summary_writer = get_loss_summary_op(sess, train_lm, train_dm)
         logger.info('Start training loop:')
         logger.debug('\n' + common_utils.SUN_BRO())
-        # writer = tf.train.SummaryWriter("tf.log", sess.graph)
-        # writer.close()
+        global_steps = 0
         for epoch in range(state.epoch, opt_lm.max_epochs):
             epoch_time = time.time()
             logger.info("========= Start epoch {} =========".format(epoch+1))
@@ -160,7 +169,9 @@ def main(opt_lm, opt_dm):
             logger.info("Traning...")
             train_lm_ppl, train_dm_ppl, steps = run_joint_epoch(
                 sess, train_lm, train_dm, train_lm_iter,
-                train_dm_iter, opt_lm, train_op)
+                train_dm_iter, opt_lm, train_op,
+                summary_writer, summary_op, global_steps)
+            global_steps += steps
             logger.info("Validating LM...")
             valid_lm_ppl, vsteps = run_epoch(sess, valid_lm,
                                              valid_lm_iter, opt_lm)
@@ -199,19 +210,25 @@ def main(opt_lm, opt_dm):
                 break
             logger.debug('Updated state:\n{}'.format(state.__repr__()))
         logger.info('Done training at epoch {}'.format(state.epoch + 1))
+        summary_writer.close()
 
 if __name__ == "__main__":
     global_time = time.time()
     parser = common_utils.get_common_argparse()
     parser.add_argument('--af_mode', type=str, default='gated_state',
                         help='additional feature module type')
+    parser.add_argument('--def_dir', type=str,
+                        default='data/ptb_defs/preprocess',
+                        help='data directory for dictionary corpus')
+    parser.add_argument('--dm_loss_weight', type=float, default=0.001,
+                        help='weight on DM loss')
+
     args = parser.parse_args()
     opt_lm = common_utils.Bunch.default_model_options()
     opt_lm.update_from_ns(args)
     opt_dm = common_utils.Bunch.default_model_options()
     opt_dm.update_from_ns(args)
     opt_dm.af_function = 'ex_emb'
-    opt_dm.data_dir = "data/ptb_defs/preprocess/"
     # With GPU, this will slow us down.
     # A proper weights to the loss function is enough to get correct gradients
     opt_dm.varied_len = True
