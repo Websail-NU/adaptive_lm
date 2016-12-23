@@ -39,8 +39,9 @@ def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
             global_step=global_step)
         return train_op, lr
 
-def run_joint_epoch(sess, train_lm, train_dm, data_iter, opt, train_op):
+def run_joint_epoch(sess, train_lm, train_dm, lm_iter, dm_iter, opt, train_op):
     start_time = time.time()
+    dm_iter.init_batch(train_dm.opt.batch_size)
     cost_lm = 0.0
     cost_dm = 0.0
     num_words_lm = 0
@@ -51,10 +52,12 @@ def run_joint_epoch(sess, train_lm, train_dm, data_iter, opt, train_op):
         state_lm.append((c.eval(), h.eval()))
     for c, h in train_dm.initial_state:
         state_dm.append((c.eval(), h.eval()))
-    for step, (x, y, w, l, seq_len) in enumerate(data_iter.iterate_epoch(
+    for step, (x, y, w, l, seq_len) in enumerate(lm_iter.iterate_epoch(
         opt.batch_size, opt.num_steps)):
-        def_x, def_y, def_w, def_l, def_seq_len = data_iter.cur_features_batch(
-            train_dm.opt.batch_size)
+        def_x, def_y, def_w, def_l, def_seq_len = dm_iter.next_batch()
+        if def_x is None:
+            dm_iter.init_batch(train_dm.opt.batch_size)
+            def_x, def_y, def_w, def_l, def_seq_len = dm_iter.next_batch()
         feed_dict = {train_lm.x: x, train_lm.y: y,
                      train_lm.w: w, train_lm.seq_len: seq_len,
                      train_dm.x: def_x, train_dm.y: def_y, train_dm.l: def_l,
@@ -82,14 +85,14 @@ def run_joint_epoch(sess, train_lm, train_dm, data_iter, opt, train_op):
                     step + 1, np.exp(cost_lm / (step + 1)),
                     np.exp(cost_dm / (step + 1)),
                     (num_words_lm + num_words_dm) / (time.time() - start_time)))
-    return np.exp(cost_lm / (step+1)), step
+    return np.exp(cost_lm / (step+1)), np.exp(cost_dm / (step + 1)), step
 
 def main(opt_lm, opt_dm):
     vocab_lm_path = os.path.join(opt_lm.data_dir, opt_lm.vocab_file)
     train_lm_path = os.path.join(opt_lm.data_dir, opt_lm.train_file)
     valid_lm_path = os.path.join(opt_lm.data_dir, opt_lm.valid_file)
     vocab_dm_path = os.path.join(opt_dm.data_dir, opt_dm.vocab_file)
-    def_f_path = os.path.join(opt_dm.data_dir, opt_dm.def_file)
+    train_dm_path = os.path.join(opt_dm.data_dir, opt_dm.train_file)
     logger.info('Loading data set...')
     logger.debug('- Loading vocab LM from {}'.format(vocab_lm_path))
     vocab_lm = data_utils.Vocabulary.from_vocab_file(vocab_lm_path)
@@ -97,26 +100,23 @@ def main(opt_lm, opt_dm):
     logger.debug('- Loading vocab DM from {}'.format(vocab_dm_path))
     vocab_dm = data_utils.Vocabulary.from_vocab_file(vocab_dm_path)
     logger.debug('-- DM vocab size: {}'.format(vocab_dm.vocab_size))
-    logger.debug('- Loading def features from {}'.format(def_f_path))
-    with open(def_f_path) as ifp:
-        def_f_idx, def_f = cPickle.load(ifp)
-    logger.debug('-- Total defs: {}'.format(len(def_f)))
     logger.debug('- Loading train LM data from {}'.format(train_lm_path))
-    train_lm_iter = data_utils.TokenFeatureIterator(
-        vocab_lm, train_lm_path,
-        t_feature_idx=def_f_idx, t_features=def_f)
+    train_lm_iter = data_utils.DataIterator(vocab_lm, train_lm_path)
     logger.debug('- Loading valid LM data from {}'.format(valid_lm_path))
     valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path)
+    logger.debug('- Loading train DM data from {}'.format(train_dm_path))
+    train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path,
+                                           l_vocab=vocab_wd)
     logger.info('Loading data completed')
 
     opt_lm.vocab_size = vocab_lm.vocab_size
-    opt_dm.num_steps = def_f.shape[1]
     opt_dm.vocab_size = vocab_dm.vocab_size
+    opt_dm.num_steps = train_dm_iter._max_seq_len
 
     init_scale = opt_lm.init_scale
     sess_config =tf.ConfigProto(log_device_placement=False)
     logger.info('Starting TF Session...')
-    with tf.device('/cpu:0'), tf.Session(config=sess_config) as sess:
+    with tf.Session(config=sess_config) as sess:
         logger.debug(
                 '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
@@ -158,14 +158,14 @@ def main(opt_lm, opt_dm):
             sess.run(tf.assign(lr_var, state.learning_rate))
             logger.info("- Learning rate = {}".format(state.learning_rate))
             logger.info("Traning...")
-            train_lm_ppl, steps = run_joint_epoch(sess, train_lm, train_dm,
-                                                  train_lm_iter,
-                                                  opt_lm, train_op)
+            train_lm_ppl, train_dm_ppl, steps = run_joint_epoch(
+                sess, train_lm, train_dm, train_lm_iter,
+                train_dm_iter, opt_lm, train_op)
             logger.info("Validating LM...")
             valid_lm_ppl, vsteps = run_epoch(sess, valid_lm,
                                              valid_lm_iter, opt_lm)
-            logger.info('Train ppl = {}, Valid ppl = {}'.format(
-                        train_lm_ppl, valid_lm_ppl))
+            logger.info('DM PPL = {}, Train ppl = {}, Valid ppl = {}'.format(
+                        train_dm_ppl, train_lm_ppl, valid_lm_ppl))
             logger.info('----------------------------------')
             logger.info('Post epoch routine...')
             state.epoch = epoch + 1
@@ -205,26 +205,16 @@ if __name__ == "__main__":
     parser = common_utils.get_common_argparse()
     parser.add_argument('--af_mode', type=str, default='gated_state',
                         help='additional feature module type')
-    parser.add_argument('--def_file', type=str,
-                        default='t_features.pickle',
-                        help=('token feature files '
-                              '(see data_utils.map_vocab_defs)'))
-    parser.add_argument('--num_def_samples', type=int, default=64,
-                        help=('Number of definitions to sample for each batch '
-                              'of text (batch size of DM)'))
-    parser.add_argument('--lm_burnin', type=int, default=1,
-                        help=('Number of epochs to run LM before starting DM.'))
     args = parser.parse_args()
     opt_lm = common_utils.Bunch.default_model_options()
     opt_lm.update_from_ns(args)
     opt_dm = common_utils.Bunch.default_model_options()
     opt_dm.update_from_ns(args)
     opt_dm.af_function = 'ex_emb'
-    opt_dm.data_dir = "data/ptb_defs/wordnet/preprocess/"
-    opt_dm.batch_size = opt_dm.num_def_samples
+    opt_dm.data_dir = "data/ptb_defs/preprocess/"
     # With GPU, this will slow us down.
     # A proper weights to the loss function is enough to get correct gradients
-    # opt_dm.varied_len = True
+    opt_dm.varied_len = True
     opt_dm.reset_state = True
     logger = common_utils.get_logger(opt_lm.log_file_path)
     if opt_lm.debug:
