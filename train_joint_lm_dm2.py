@@ -46,7 +46,7 @@ def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
 
 def run_joint_epoch(sess, train_lm, train_dm,
                     lm_iter, dm_iter, opt, train_op,
-                    summary_writer, summary_op, global_steps):
+                    summary_writer=None, summary_op=None, global_steps=None):
     start_time = time.time()
     dm_iter.init_batch(train_dm.opt.batch_size)
     cost_lm = 0.0
@@ -81,7 +81,7 @@ def run_joint_epoch(sess, train_lm, train_dm,
         for i, (c, h) in enumerate(train_dm.initial_state):
             feed_dict[c], feed_dict[h] = state_dm[i]
         res = sess.run(fetches, feed_dict)
-        state_flat = res[4:3+2*train_lm.opt.num_layers]
+        state_flat = res[4:4+2*train_lm.opt.num_layers]
         state_lm = [state_flat[i:i+2] for i in range(0, len(state_flat), 2)]
         cost_lm += res[0]
         cost_dm += res[1]
@@ -125,7 +125,7 @@ def main(opt_lm, opt_dm):
     init_scale = opt_lm.init_scale
     sess_config =tf.ConfigProto(log_device_placement=False)
     logger.info('Starting TF Session...')
-    with tf.Session(config=sess_config) as sess:
+    with tf.device('/cpu:0'), tf.Session(config=sess_config) as sess:
         logger.debug(
                 '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
@@ -157,6 +157,7 @@ def main(opt_lm, opt_dm):
         state = common_utils.get_initial_training_state()
         state.learning_rate = opt_lm.learning_rate
         state, _ = resume_if_possible(opt_lm, sess, saver, state)
+        logger.debug('Creating Summary Writer...')
         summary_op, summary_writer = get_loss_summary_op(sess, train_lm, train_dm)
         logger.info('Start training loop:')
         logger.debug('\n' + common_utils.SUN_BRO())
@@ -233,6 +234,7 @@ if __name__ == "__main__":
     # A proper weights to the loss function is enough to get correct gradients
     opt_dm.varied_len = True
     opt_dm.reset_state = True
+    opt_dm.data_dir = opt_dm.def_dir
     logger = common_utils.get_logger(opt_lm.log_file_path)
     if opt_lm.debug:
         logger.setLevel(logging.DEBUG)
