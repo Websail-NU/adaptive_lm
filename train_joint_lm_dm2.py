@@ -115,7 +115,7 @@ def main(opt_lm, opt_dm):
     valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path)
     logger.debug('- Loading train DM data from {}'.format(train_dm_path))
     train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path,
-                                           l_vocab=vocab_wd)
+                                           l_vocab=vocab_lm)
     logger.info('Loading data completed')
 
     opt_lm.vocab_size = vocab_lm.vocab_size
