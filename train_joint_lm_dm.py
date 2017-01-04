@@ -20,21 +20,22 @@ from exp_utils import *
 def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
     with tf.variable_scope('joint_training_ops'):
         loss_lm = train_lm.loss * opt_lm.num_steps
-        loss_dm = train_dm.loss * (opt_dm.num_steps * opt_dm.dm_loss_weight)
+        # XXX: change 0.05 into an argument or even better a decaying variable
+        loss_dm = train_dm.loss * (opt_dm.num_steps * 0.05)
         joint_loss = loss_lm + loss_dm
+        train_vars = tf.trainable_variables()
+        grads = tf.gradients(joint_loss, train_vars)
+        clipped_grads, _norm = tf.clip_by_global_norm(
+            grads, opt_lm.max_grad_norm
+        )
         lr = tf.Variable(opt_lm.learning_rate, trainable=False,
                          name="learning_rate")
         global_step = tf.get_variable("global_step", [], tf.float32,
                                       initializer=tf.zeros_initializer,
                                       trainable=False)
         optimizer = tf.train.GradientDescentOptimizer(lr)
-        g_v_pairs = optimizer.compute_gradients(joint_loss)
-        grads = [p[0] for p in g_v_pairs]
-        clipped_grads, _norm = tf.clip_by_global_norm(
-            grads, opt_lm.max_grad_norm)
-        g_v_pairs = zip(clipped_grads, [p[1] for p in g_v_pairs])
         train_op = optimizer.apply_gradients(
-            g_v_pairs,
+            zip(clipped_grads, train_vars),
             global_step=global_step)
         return train_op, lr
 
@@ -88,7 +89,7 @@ def main(opt_lm, opt_dm):
     train_lm_path = os.path.join(opt_lm.data_dir, opt_lm.train_file)
     valid_lm_path = os.path.join(opt_lm.data_dir, opt_lm.valid_file)
     vocab_dm_path = os.path.join(opt_dm.data_dir, opt_dm.vocab_file)
-    train_dm_path = os.path.join(opt_dm.data_dir, opt_dm.train_file)
+    def_f_path = os.path.join(opt_dm.data_dir, opt_dm.def_file)
     logger.info('Loading data set...')
     logger.debug('- Loading vocab LM from {}'.format(vocab_lm_path))
     vocab_lm = data_utils.Vocabulary.from_vocab_file(vocab_lm_path)
@@ -96,23 +97,26 @@ def main(opt_lm, opt_dm):
     logger.debug('- Loading vocab DM from {}'.format(vocab_dm_path))
     vocab_dm = data_utils.Vocabulary.from_vocab_file(vocab_dm_path)
     logger.debug('-- DM vocab size: {}'.format(vocab_dm.vocab_size))
+    logger.debug('- Loading def features from {}'.format(def_f_path))
+    with open(def_f_path) as ifp:
+        def_f_idx, def_f = cPickle.load(ifp)
+    logger.debug('-- Total defs: {}'.format(len(def_f)))
     logger.debug('- Loading train LM data from {}'.format(train_lm_path))
-    train_lm_iter = data_utils.DataIterator(vocab_lm, train_lm_path)
+    train_lm_iter = data_utils.TokenFeatureIterator(
+        vocab_lm, train_lm_path,
+        t_feature_idx=def_f_idx, t_features=def_f)
     logger.debug('- Loading valid LM data from {}'.format(valid_lm_path))
     valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path)
-    logger.debug('- Loading train DM data from {}'.format(train_dm_path))
-    train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path,
-                                           l_vocab=vocab_lm)
     logger.info('Loading data completed')
 
     opt_lm.vocab_size = vocab_lm.vocab_size
+    opt_dm.num_steps = def_f.shape[1]
     opt_dm.vocab_size = vocab_dm.vocab_size
-    opt_dm.num_steps = train_dm_iter._max_seq_len
 
     init_scale = opt_lm.init_scale
     sess_config =tf.ConfigProto(log_device_placement=False)
     logger.info('Starting TF Session...')
-    with tf.Session(config=sess_config) as sess:
+    with tf.device('/cpu:0'), tf.Session(config=sess_config) as sess:
         logger.debug(
                 '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
@@ -132,8 +136,8 @@ def main(opt_lm, opt_dm):
         with tf.variable_scope('DM', reuse=None, initializer=initializer):
             train_dm = lm.LMwAF(opt_dm, create_grads=False)
         logger.debug('- Creating training operation...')
-        train_op, lr_var = get_joint_train_op(
-            train_lm, train_dm, opt_lm, opt_dm)
+        train_op, lr_var = get_joint_train_op(train_lm, train_dm,
+                                              opt_lm, opt_dm)
         logger.debug('Trainable variables:')
         for v in tf.trainable_variables():
             logger.debug("- {} {} {}".format(v.name, v.get_shape(), v.device))
@@ -154,11 +158,12 @@ def main(opt_lm, opt_dm):
             sess.run(tf.assign(lr_var, state.learning_rate))
             logger.info("- Learning rate = {}".format(state.learning_rate))
             logger.info("Traning...")
-            train_lm_ppl, steps = run_joint_epoch(
-                sess, train_lm, train_dm, train_lm_iter, opt_lm, train_op)
+            train_lm_ppl, steps = run_joint_epoch(sess, train_lm, train_dm,
+                                                  train_lm_iter,
+                                                  opt_lm, train_op)
             logger.info("Validating LM...")
-            valid_lm_ppl, vsteps = run_epoch(
-                sess, valid_lm, valid_lm_iter, opt_lm)
+            valid_lm_ppl, vsteps = run_epoch(sess, valid_lm,
+                                             valid_lm_iter, opt_lm)
             logger.info('Train ppl = {}, Valid ppl = {}'.format(
                         train_lm_ppl, valid_lm_ppl))
             logger.info('----------------------------------')
@@ -200,21 +205,27 @@ if __name__ == "__main__":
     parser = common_utils.get_common_argparse()
     parser.add_argument('--af_mode', type=str, default='gated_state',
                         help='additional feature module type')
-    parser.add_argument('--def_dir', type=str,
-                        default='data/ptb_defs/preprocess',
-                        help='data directory for dictionary corpus')
-    parser.add_argument('--dm_loss_weight', type=float, default=0.001,
-                        help='weight on DM loss')
-
+    parser.add_argument('--def_file', type=str,
+                        default='t_features.pickle',
+                        help=('token feature files '
+                              '(see data_utils.map_vocab_defs)'))
+    parser.add_argument('--num_def_samples', type=int, default=64,
+                        help=('Number of definitions to sample for each batch '
+                              'of text (batch size of DM)'))
+    parser.add_argument('--lm_burnin', type=int, default=1,
+                        help=('Number of epochs to run LM before starting DM.'))
     args = parser.parse_args()
     opt_lm = common_utils.Bunch.default_model_options()
     opt_lm.update_from_ns(args)
     opt_dm = common_utils.Bunch.default_model_options()
     opt_dm.update_from_ns(args)
     opt_dm.af_function = 'ex_emb'
-    opt_dm.varied_len = True
+    opt_dm.data_dir = "data/ptb_defs/wordnet/preprocess/"
+    opt_dm.batch_size = opt_dm.num_def_samples
+    # With GPU, this will slow us down.
+    # A proper weights to the loss function is enough to get correct gradients
+    # opt_dm.varied_len = True
     opt_dm.reset_state = True
-    opt_dm.data_dir = opt_dm.def_dir
     logger = common_utils.get_logger(opt_lm.log_file_path)
     if opt_lm.debug:
         logger.setLevel(logging.DEBUG)
