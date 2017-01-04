@@ -124,7 +124,7 @@ def main(opt_lm, opt_dm):
         with tf.variable_scope('shared_emb'):
             shared_emb_vars = lm.sharded_variable(
                 'emb', [opt_lm.vocab_size, opt_lm.emb_size], opt_lm.num_shards)
-        # opt_lm.input_emb_vars = shared_emb_vars
+        opt_lm.input_emb_vars = shared_emb_vars
         opt_dm.af_ex_emb_vars = shared_emb_vars
         logger.debug('- Creating training LM...')
         with tf.variable_scope('LM', reuse=None, initializer=initializer):

@@ -172,7 +172,7 @@ class LM(object):
             Return clipped gradients and trainable variables
         """
         loss = loss * opt.num_steps
-        emb_vars, rnn_vars, softmax_vars, other_vars = self._get_variables()
+        emb_vars, rnn_vars, softmax_vars, other_vars = self._get_variables(opt)
         all_vars = emb_vars + rnn_vars + softmax_vars + other_vars
         grads = tf.gradients(loss, all_vars)
         orig_grads = grads[:]
@@ -195,8 +195,12 @@ class LM(object):
         assert len(clipped_grads) == len(orig_grads)
         return clipped_grads, all_vars
 
-    def _get_variables(self):
-        emb_vars = find_trainable_variables(self._top_scope, "emb")
+    def _get_variables(self, opt):
+        emb_vars = None
+        if hasattr(opt, 'input_emb_vars'):
+            emb_vars = opt.input_emb_vars
+        else:
+            emb_vars = find_trainable_variables(self._top_scope, "emb")
         rnn_vars = find_trainable_variables(self._top_scope, "rnn")
         softmax_vars = find_trainable_variables(self._top_scope, "softmax")
         other_vars = self._get_additional_variables()
