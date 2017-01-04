@@ -121,18 +121,16 @@ def main(opt_lm, opt_dm):
         opt_dm.af_ex_emb_vars = shared_emb_vars
         logger.debug('- Creating training LM...')
         with tf.variable_scope('LM', reuse=None, initializer=initializer):
-            # train_lm = lm.LM(opt_lm, create_grads=False)
-            train_lm = lm.LM(opt_lm, create_grads=True)
-            train_op, lr_var = lm.train_op(train_lm, train_lm.opt)
+            train_lm = lm.LM(opt_lm, create_grads=False)
         logger.debug('- Creating validating LM (reuse params)...')
         with tf.variable_scope('LM', reuse=True, initializer=initializer):
             valid_lm = lm.LM(opt_lm, is_training=False)
         logger.debug('- Creating training DM...')
         with tf.variable_scope('DM', reuse=None, initializer=initializer):
             train_dm = lm.LMwAF(opt_dm, create_grads=False)
-        # logger.debug('- Creating training operation...')
-        # train_op, lr_var = get_joint_train_op(train_lm, train_dm,
-        #                                       opt_lm, opt_dm)
+        logger.debug('- Creating training operation...')
+        train_op, lr_var = get_joint_train_op(
+            train_lm, train_dm, opt_lm, opt_dm)
         logger.debug('Trainable variables:')
         for v in tf.trainable_variables():
             logger.debug("- {} {} {}".format(v.name, v.get_shape(), v.device))
