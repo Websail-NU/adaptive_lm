@@ -20,22 +20,20 @@ from exp_utils import *
 def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
     with tf.variable_scope('joint_training_ops'):
         loss_lm = train_lm.loss * opt_lm.num_steps
-        # XXX: change 0.05 into an argument or even better a decaying variable
-        loss_dm = train_dm.loss * (opt_dm.num_steps * 0.05)
+        loss_dm = train_dm.loss * (opt_dm.num_steps * opt_dm.dm_loss_weight)
         joint_loss = loss_lm + loss_dm
-        train_vars = tf.trainable_variables()
-        grads = tf.gradients(joint_loss, train_vars)
-        clipped_grads, _norm = tf.clip_by_global_norm(
-            grads, opt_lm.max_grad_norm
-        )
         lr = tf.Variable(opt_lm.learning_rate, trainable=False,
                          name="learning_rate")
         global_step = tf.get_variable("global_step", [], tf.float32,
                                       initializer=tf.zeros_initializer,
                                       trainable=False)
         optimizer = tf.train.GradientDescentOptimizer(lr)
+        g_v_pairs = optimizer.compute_gradients(joint_loss)
+        grads = [p[0] for p in g_v_pairs]
+        clipped_grads, _norm = tf.clip_by_global_norm(grads, opt.max_grad_norm)
+        g_v_pairs = zip(clipped_grads, [p[1] for p in g_v_pairs])
         train_op = optimizer.apply_gradients(
-            zip(clipped_grads, train_vars),
+            g_v_pairs,
             global_step=global_step)
         return train_op, lr
 
@@ -205,27 +203,21 @@ if __name__ == "__main__":
     parser = common_utils.get_common_argparse()
     parser.add_argument('--af_mode', type=str, default='gated_state',
                         help='additional feature module type')
-    parser.add_argument('--def_file', type=str,
-                        default='t_features.pickle',
-                        help=('token feature files '
-                              '(see data_utils.map_vocab_defs)'))
-    parser.add_argument('--num_def_samples', type=int, default=64,
-                        help=('Number of definitions to sample for each batch '
-                              'of text (batch size of DM)'))
-    parser.add_argument('--lm_burnin', type=int, default=1,
-                        help=('Number of epochs to run LM before starting DM.'))
+    parser.add_argument('--def_dir', type=str,
+                        default='data/ptb_defs/preprocess',
+                        help='data directory for dictionary corpus')
+    parser.add_argument('--dm_loss_weight', type=float, default=0.001,
+                        help='weight on DM loss')
+
     args = parser.parse_args()
     opt_lm = common_utils.Bunch.default_model_options()
     opt_lm.update_from_ns(args)
     opt_dm = common_utils.Bunch.default_model_options()
     opt_dm.update_from_ns(args)
     opt_dm.af_function = 'ex_emb'
-    opt_dm.data_dir = "data/ptb_defs/wordnet/preprocess/"
-    opt_dm.batch_size = opt_dm.num_def_samples
-    # With GPU, this will slow us down.
-    # A proper weights to the loss function is enough to get correct gradients
-    # opt_dm.varied_len = True
+    opt_dm.varied_len = True
     opt_dm.reset_state = True
+    opt_dm.data_dir = opt_dm.def_dir
     logger = common_utils.get_logger(opt_lm.log_file_path)
     if opt_lm.debug:
         logger.setLevel(logging.DEBUG)
