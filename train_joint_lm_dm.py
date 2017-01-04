@@ -87,7 +87,7 @@ def main(opt_lm, opt_dm):
     train_lm_path = os.path.join(opt_lm.data_dir, opt_lm.train_file)
     valid_lm_path = os.path.join(opt_lm.data_dir, opt_lm.valid_file)
     vocab_dm_path = os.path.join(opt_dm.data_dir, opt_dm.vocab_file)
-    def_f_path = os.path.join(opt_dm.data_dir, opt_dm.def_file)
+    train_dm_path = os.path.join(opt_dm.data_dir, opt_dm.train_file)
     logger.info('Loading data set...')
     logger.debug('- Loading vocab LM from {}'.format(vocab_lm_path))
     vocab_lm = data_utils.Vocabulary.from_vocab_file(vocab_lm_path)
@@ -95,26 +95,23 @@ def main(opt_lm, opt_dm):
     logger.debug('- Loading vocab DM from {}'.format(vocab_dm_path))
     vocab_dm = data_utils.Vocabulary.from_vocab_file(vocab_dm_path)
     logger.debug('-- DM vocab size: {}'.format(vocab_dm.vocab_size))
-    logger.debug('- Loading def features from {}'.format(def_f_path))
-    with open(def_f_path) as ifp:
-        def_f_idx, def_f = cPickle.load(ifp)
-    logger.debug('-- Total defs: {}'.format(len(def_f)))
     logger.debug('- Loading train LM data from {}'.format(train_lm_path))
-    train_lm_iter = data_utils.TokenFeatureIterator(
-        vocab_lm, train_lm_path,
-        t_feature_idx=def_f_idx, t_features=def_f)
+    train_lm_iter = data_utils.DataIterator(vocab_lm, train_lm_path)
     logger.debug('- Loading valid LM data from {}'.format(valid_lm_path))
     valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path)
+    logger.debug('- Loading train DM data from {}'.format(train_dm_path))
+    train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path,
+                                           l_vocab=vocab_lm)
     logger.info('Loading data completed')
 
     opt_lm.vocab_size = vocab_lm.vocab_size
-    opt_dm.num_steps = def_f.shape[1]
     opt_dm.vocab_size = vocab_dm.vocab_size
+    opt_dm.num_steps = train_dm_iter._max_seq_len
 
     init_scale = opt_lm.init_scale
     sess_config =tf.ConfigProto(log_device_placement=False)
     logger.info('Starting TF Session...')
-    with tf.device('/cpu:0'), tf.Session(config=sess_config) as sess:
+    with tf.Session(config=sess_config) as sess:
         logger.debug(
                 '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
@@ -134,8 +131,8 @@ def main(opt_lm, opt_dm):
         with tf.variable_scope('DM', reuse=None, initializer=initializer):
             train_dm = lm.LMwAF(opt_dm, create_grads=False)
         logger.debug('- Creating training operation...')
-        train_op, lr_var = get_joint_train_op(train_lm, train_dm,
-                                              opt_lm, opt_dm)
+        train_op, lr_var = get_joint_train_op(
+            train_lm, train_dm, opt_lm, opt_dm)
         logger.debug('Trainable variables:')
         for v in tf.trainable_variables():
             logger.debug("- {} {} {}".format(v.name, v.get_shape(), v.device))
@@ -156,12 +153,11 @@ def main(opt_lm, opt_dm):
             sess.run(tf.assign(lr_var, state.learning_rate))
             logger.info("- Learning rate = {}".format(state.learning_rate))
             logger.info("Traning...")
-            train_lm_ppl, steps = run_joint_epoch(sess, train_lm, train_dm,
-                                                  train_lm_iter,
-                                                  opt_lm, train_op)
+            train_lm_ppl, steps = run_joint_epoch(
+                sess, train_lm, train_dm, train_lm_iter, opt_lm, train_op)
             logger.info("Validating LM...")
-            valid_lm_ppl, vsteps = run_epoch(sess, valid_lm,
-                                             valid_lm_iter, opt_lm)
+            valid_lm_ppl, vsteps = run_epoch(
+                sess, valid_lm, valid_lm_iter, opt_lm)
             logger.info('Train ppl = {}, Valid ppl = {}'.format(
                         train_lm_ppl, valid_lm_ppl))
             logger.info('----------------------------------')
