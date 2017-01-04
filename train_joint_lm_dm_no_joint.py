@@ -117,14 +117,14 @@ def main(opt_lm, opt_dm):
     sess_config =tf.ConfigProto(log_device_placement=False)
     logger.info('Starting TF Session...')
     with tf.Session(config=sess_config) as sess:
-        logger.debug(
-                '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
+        logger.debug('- Creating initializer ({} to {})'.format(
+            -init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         logger.debug('- Creating shared embedding variables...')
         with tf.variable_scope('shared_emb'):
             shared_emb_vars = lm.sharded_variable(
                 'emb', [opt_lm.vocab_size, opt_lm.emb_size], opt_lm.num_shards)
-        opt_lm.input_emb_vars = shared_emb_vars
+        # opt_lm.input_emb_vars = shared_emb_vars
         opt_dm.af_ex_emb_vars = shared_emb_vars
         logger.debug('- Creating training LM...')
         with tf.variable_scope('LM', reuse=None, initializer=initializer):
