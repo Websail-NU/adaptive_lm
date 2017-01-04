@@ -30,7 +30,8 @@ def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
         optimizer = tf.train.GradientDescentOptimizer(lr)
         g_v_pairs = optimizer.compute_gradients(joint_loss)
         grads = [p[0] for p in g_v_pairs]
-        clipped_grads, _norm = tf.clip_by_global_norm(grads, opt.max_grad_norm)
+        clipped_grads, _norm = tf.clip_by_global_norm(
+            grads, opt_lm.max_grad_norm)
         g_v_pairs = zip(clipped_grads, [p[1] for p in g_v_pairs])
         train_op = optimizer.apply_gradients(
             g_v_pairs,
