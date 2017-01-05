@@ -29,10 +29,18 @@ def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
                                       trainable=False)
         optimizer = tf.train.GradientDescentOptimizer(lr)
         g_v_pairs = optimizer.compute_gradients(joint_loss)
-        grads = [p[0] for p in g_v_pairs]
+        grads, tvars = [], []
+        for g,v in g_v_pairs:
+            tvars.append(v)
+            if "emb" in v.name:
+                assert isinstance(g, tf.IndexedSlices)
+                grads.append(tf.IndexedSlices(g.values * opt_lm.batch_size,
+                                              g.indices, g.dense_shape))
+            else:
+                grads.append(g)
         clipped_grads, _norm = tf.clip_by_global_norm(
             grads, opt_lm.max_grad_norm)
-        g_v_pairs = zip(clipped_grads, [p[1] for p in g_v_pairs])
+        g_v_pairs = zip(clipped_grads, tvars)
         train_op = optimizer.apply_gradients(
             g_v_pairs,
             global_step=global_step)
