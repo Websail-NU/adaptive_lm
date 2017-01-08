@@ -53,7 +53,7 @@ def update_lr(opt, state):
         if state.val_ppl / state.last_imp_val_ppl < opt.lr_decay_imp:
             logger.info('- Significant improvement found')
             logger.info('-- epoch: {} -> {}'.format(
-                state.last_imp_epoch + 1, state.epoch + 1))
+                state.last_imp_epoch + 1, state.epoch))
             state.last_imp_epoch = state.epoch
             state.last_imp_val_ppl = state.val_ppl
             state.imp_wait = 0

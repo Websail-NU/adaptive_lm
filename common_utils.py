@@ -56,7 +56,8 @@ class Bunch(object):
             state_size=100,
             num_softmax_sampled=0,
             run_profiler=False,
-            init_scale=0.1
+            init_scale=0.1,
+            input_emb_trainable=True
         )
         return opt
 

@@ -21,12 +21,17 @@ def find_trainable_variables(top_scope, key):
     return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                              "{}/.*{}.*".format(top_scope, key))
 
-def sharded_variable(name, shape, num_shards,
-                     dtype=tf.float32):
+def sharded_variable(name, shape, num_shards, trainable=True,
+                     dtype=tf.float32, initializer=None):
     # The final size of the sharded variable may be larger than requested.
     # This should be fine for embeddings.
     shard_size = int((shape[0] + num_shards - 1) / num_shards)
-    initializer = tf.uniform_unit_scaling_initializer(dtype=dtype)
+    if initializer is None:
+        initializer = tf.uniform_unit_scaling_initializer(dtype=dtype)
+    if isinstance(initializer, tf.Tensor):
+        return [tf.get_variable(name+"_0",
+                                initializer=initializer,
+                                dtype=dtype, trainable=trainable)]
     return [tf.get_variable(name + "_%d" % i,
                             [shard_size, shape[1]],
                             initializer=initializer,
@@ -99,9 +104,14 @@ class LM(object):
         emb_vars = None
         if hasattr(opt, 'input_emb_vars'):
             emb_vars = opt.input_emb_vars
+        elif hasattr(opt, 'input_emb_init'):
+            emb_vars = sharded_variable(
+                "emb", [1,1], 1, initializer=opt.input_emb_init,
+                trainable=opt.input_emb_trainable)
         else:
             emb_vars = sharded_variable(
-                "emb", [opt.vocab_size, opt.emb_size], opt.num_shards)
+                "emb", [opt.vocab_size, opt.emb_size], opt.num_shards,
+                trainable=opt.input_emb_trainable)
         return emb_vars
 
     def _input_graph(self, opt, emb_vars, x):

@@ -117,6 +117,7 @@ def main(opt_lm, opt_dm):
     init_scale = opt_lm.init_scale
     sess_config =tf.ConfigProto(log_device_placement=False)
     logger.info('Starting TF Session...')
+    # with tf.device("/cpu:0"), tf.Session(config=sess_config) as sess:
     with tf.Session(config=sess_config) as sess:
         logger.debug(
                 '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
@@ -125,8 +126,14 @@ def main(opt_lm, opt_dm):
         with tf.variable_scope('shared_emb'):
             shared_emb_vars = lm.sharded_variable(
                 'emb', [opt_lm.vocab_size, opt_lm.emb_size], opt_lm.num_shards)
+        logger.debug('- Loading embedding for DM...')
+        with open('data/ptb_defs/preprocess/emb.cpickle') as ifp:
+            emb_array = cPickle.load(ifp)
+            dm_emb_init = tf.constant(emb_array, dtype=tf.float32)
         opt_lm.input_emb_vars = shared_emb_vars
         opt_dm.af_ex_emb_vars = shared_emb_vars
+        opt_dm.input_emb_init = dm_emb_init
+        opt_dm.input_emb_trainable = False
         logger.debug('- Creating training LM...')
         with tf.variable_scope('LM', reuse=None, initializer=initializer):
             train_lm = lm.LM(opt_lm, create_grads=False)
