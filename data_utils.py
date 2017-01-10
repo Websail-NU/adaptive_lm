@@ -139,38 +139,67 @@ class Vocabulary(object):
 ######################################################
 
 class DataIterator(object):
+    """
+    Iterate over text data
+
+    kwargs:
+        * x_vocab: Vocabulary for inputs
+        * y_vocab: Vocabulary for targets
+    """
     def __init__(self, vocab=None, file_path=None, **kwargs):
         self._kwargs = kwargs
+        self._x_vocab, self._y_vocab = None, None
+        if 'x_vocab' in self._kwargs:
+            self._x_vocab = self._kwargs['x_vocab']
+        if 'y_vocab' in self._kwargs:
+            self._y_vocab = self._kwargs['y_vocab']
         if vocab is not None:
             self._vocab = vocab
             self._padding_id = vocab.eos_id
-            self._data, self._lidx, self._lkeys, self._max_seq_len \
-            = self._parse_file(file_path)
+            self._parse_file(file_path)
 
-    def _parse_sentence(self, sentence):
-        indexes = [self._vocab.w2i(word) for word in sentence.split()]
+    def _parse_sentence(self, sentence, vocab=None):
+        if vocab is None:
+            vocab = self._vocab
+        indexes = [vocab.w2i(word) for word in sentence.split()]
         # return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
-        return indexes + [self._vocab.eos_id]
+        return indexes + [vocab.eos_id]
+
+    def _append_data_if_vocab(self, doc, vocab, data):
+        if vocab is None:
+            return 0
+        seq_len = 0
+        for s in doc['lines']:
+            sen = self._parse_sentence(s, vocab)
+            seq_len += len(sen)
+            data.extend(sen)
+        return seq_len
 
     def _parse_file(self, filepath):
-        data = []
-        label_idx = []
-        label_keys = []
+        data, data_x, data_y, label_idx, label_keys  = [], [], [], [], []
         max_seq_len = 0
         with open(filepath) as ifp:
             for line in ifp:
                 doc = json.loads(line)
                 label_idx.append(len(data))
                 label_keys.append(doc['key'])
-                seq_len = 0
-                for s in doc['lines']:
-                    line = self._parse_sentence(s)
-                    seq_len += len(line)
-                    data += line
+                seq_len = self._append_data_if_vocab(doc, self._vocab, data)
+                _ = self._append_data_if_vocab(doc, self._x_vocab, data_x)
+                _ = self._append_data_if_vocab(doc, self._y_vocab, data_y)
                 if seq_len > max_seq_len:
                     max_seq_len = seq_len
-        data = np.array(data, np.int32)
-        return data, label_idx, label_keys, max_seq_len
+        self._data = np.array(data, np.int32)
+        if len(data_x) == 0:
+            self._data_x = self._data
+        else:
+            self._data_x = np.array(data_x, np.int32)
+        if len(data_y) == 0:
+            self._data_y = self._data
+        else:
+            self._data_y = np.array(data_y, np.int32)
+        self._lidx = label_idx
+        self._lkeys = label_keys
+        self._max_seq_len = max_seq_len
 
     def _find_label(self, data_pointer):
         return self._lkeys[bisect_right(self._lidx, data_pointer) - 1]
@@ -208,8 +237,8 @@ class DataIterator(object):
             num_tokens = self._num_steps
             if p + self._num_steps + 1 > len(self._data):
                 num_tokens = len(self._data) - p - 1
-            self.x[i, :num_tokens] = self._data[p: p + num_tokens]
-            self.y[i, :num_tokens] = self._data[p + 1: p + num_tokens + 1]
+            self.x[i, :num_tokens] = self._data_x[p: p + num_tokens]
+            self.y[i, :num_tokens] = self._data_y[p + 1: p + num_tokens + 1]
             self.w[i, :num_tokens] = 1
             for j in range(num_tokens):
                 self.l[i][j] = self._find_label(p + j)
@@ -241,7 +270,6 @@ class TokenFeatureIterator(DataIterator):
         * t_features: numpy array of features
     """
     def _parse_file(self, filepath):
-        data, label_idx, label_keys, max_seq_len =\
         super(TokenFeatureIterator,self)._parse_file(filepath)
         self._t_f_idx = None
         self._t_f = None
@@ -253,7 +281,6 @@ class TokenFeatureIterator(DataIterator):
             self._t_f_idx = self._kwargs['t_feature_idx']
             self._t_f = self._kwargs['t_features']
             self.feature_size = self._t_f.shape[1]
-        return data, label_idx, label_keys, max_seq_len
 
     def _find_label(self, data_pointer):
         if self._t_f_idx is None:
@@ -354,8 +381,10 @@ class DefIterator(DataIterator):
             cur_seq_end = cur_seq_start + label_idx[i] - prev_idx
             padded_data[cur_seq_start:cur_seq_end] = data[prev_idx:label_idx[i]]
             prev_idx = label_idx[i]
-        # data = np.array(data, np.int32)
-        return padded_data, padded_label_idx, label_keys, max_seq_len
+        self._data = padded_data
+        self._lidx = padded_label_idx
+        self._lkeys = label_keys
+        self._max_seq_len = max_seq_len
 
     def _shuffle_data(self):
         shuff_keys = []
