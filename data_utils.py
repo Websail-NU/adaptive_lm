@@ -382,6 +382,9 @@ class DefIterator(DataIterator):
             padded_data[cur_seq_start:cur_seq_end] = data[prev_idx:label_idx[i]]
             prev_idx = label_idx[i]
         self._data = padded_data
+        # XXX: Properly set this
+        self._data_x = padded_data
+        self._data_y = padded_data
         self._lidx = padded_label_idx
         self._lkeys = label_keys
         self._max_seq_len = max_seq_len

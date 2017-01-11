@@ -89,12 +89,17 @@ def run_joint_epoch(sess, train_lm, train_dm,
     return np.exp(cost_lm / (step+1)), np.exp(cost_dm / (step + 1)), step
 
 def main(opt_lm, opt_dm):
+    vocab_emb_path = opt_lm.shared_emb_vocab
     vocab_lm_path = os.path.join(opt_lm.data_dir, opt_lm.vocab_file)
     train_lm_path = os.path.join(opt_lm.data_dir, opt_lm.train_file)
     valid_lm_path = os.path.join(opt_lm.data_dir, opt_lm.valid_file)
     vocab_dm_path = os.path.join(opt_dm.data_dir, opt_dm.vocab_file)
     train_dm_path = os.path.join(opt_dm.data_dir, opt_dm.train_file)
+    dm_emb_path = os.path.join(opt_dm.data_dir, 'emb.cpickle')
     logger.info('Loading data set...')
+    logger.debug('- Loading vocab shared emb from {}'.format(vocab_emb_path))
+    vocab_emb= data_utils.Vocabulary.from_vocab_file(vocab_emb_path)
+    logger.debug('-- Shared emb vocab size: {}'.format(vocab_emb.vocab_size))
     logger.debug('- Loading vocab LM from {}'.format(vocab_lm_path))
     vocab_lm = data_utils.Vocabulary.from_vocab_file(vocab_lm_path)
     logger.debug('-- LM vocab size: {}'.format(vocab_lm.vocab_size))
@@ -102,12 +107,13 @@ def main(opt_lm, opt_dm):
     vocab_dm = data_utils.Vocabulary.from_vocab_file(vocab_dm_path)
     logger.debug('-- DM vocab size: {}'.format(vocab_dm.vocab_size))
     logger.debug('- Loading train LM data from {}'.format(train_lm_path))
-    train_lm_iter = data_utils.DataIterator(vocab_lm, train_lm_path)
+    train_lm_iter = data_utils.DataIterator(vocab_lm, train_lm_path,
+                                            x_vocab=vocab_emb)
     logger.debug('- Loading valid LM data from {}'.format(valid_lm_path))
     valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path)
     logger.debug('- Loading train DM data from {}'.format(train_dm_path))
     train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path,
-                                           l_vocab=vocab_lm)
+                                           l_vocab=vocab_emb)
     logger.info('Loading data completed')
 
     opt_lm.vocab_size = vocab_lm.vocab_size
@@ -117,17 +123,18 @@ def main(opt_lm, opt_dm):
     init_scale = opt_lm.init_scale
     sess_config =tf.ConfigProto(log_device_placement=False)
     logger.info('Starting TF Session...')
-    # with tf.device("/cpu:0"), tf.Session(config=sess_config) as sess:
-    with tf.Session(config=sess_config) as sess:
+    with tf.device("/cpu:0"), tf.Session(config=sess_config) as sess:
+    # with tf.Session(config=sess_config) as sess:
         logger.debug(
                 '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         logger.debug('- Creating shared embedding variables...')
         with tf.variable_scope('shared_emb'):
             shared_emb_vars = lm.sharded_variable(
-                'emb', [opt_lm.vocab_size, opt_lm.emb_size], opt_lm.num_shards)
+                'emb', [vocab_emb.vocab_size, opt_lm.emb_size],
+                opt_lm.num_shards)
         logger.debug('- Loading embedding for DM...')
-        with open('data/ptb_defs/preprocess/emb.cpickle') as ifp:
+        with open(dm_emb_path) as ifp:
             emb_array = cPickle.load(ifp)
             dm_emb_init = tf.constant(emb_array, dtype=tf.float32)
         opt_lm.input_emb_vars = shared_emb_vars
@@ -217,8 +224,11 @@ if __name__ == "__main__":
     parser.add_argument('--def_dir', type=str,
                         default='data/ptb_defs/preprocess',
                         help='data directory for dictionary corpus')
-    parser.add_argument('--dm_loss_weight', type=float, default=0.001,
+    parser.add_argument('--dm_loss_weight', type=float, default=0.1,
                         help='weight on DM loss')
+    parser.add_argument('--shared_emb_vocab', type=str,
+                        default='data/ptb/preprocess/vocab.txt',
+                        help='vocab file for shared emb')
 
     args = parser.parse_args()
     opt_lm = common_utils.Bunch.default_model_options()
