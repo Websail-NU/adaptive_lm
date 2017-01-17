@@ -1,12 +1,14 @@
 #!/bin/bash
 
 echo "[1/2] Downloading data..."
+wget http://websail-fe.cs.northwestern.edu/downloads/dictdef/common_defs_ptb_shortlist.txt
 wget http://websail-fe.cs.northwestern.edu/downloads/dictdef/common_words_defs.tar.gz
 tar -xvf common_words_defs.tar.gz
 cp -r common_words_defs/split_v1.2 common_defs_v1.2
 rm -r common_words_defs
 rm common_words_defs.tar.gz
 cd common_defs_v1.2
+mv common_defs_ptb_shortlist.txt common_defs_v1.2/shortlist/
 mkdir preprocess
 SPLITS="train valid test"
 for SPLIT in $SPLITS; do
