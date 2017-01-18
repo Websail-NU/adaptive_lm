@@ -134,6 +134,13 @@ class Vocabulary(object):
                 l.append(vocab.w2i(word))
         return l
 
+    @staticmethod
+    def create_vocab_mask(keep_vocab, full_vocab):
+        mask = np.zeros(full_vocab.vocab_size)
+        for w in keep_vocab.word_set():
+            mask[full_vocab.w2i(w)] = 1
+        return mask
+
 ######################################################
 # DataIterator
 ######################################################

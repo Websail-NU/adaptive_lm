@@ -110,15 +110,24 @@ def main(opt_lm, opt_dm):
     train_lm_iter = data_utils.DataIterator(vocab_lm, train_lm_path,
                                             x_vocab=vocab_emb)
     logger.debug('- Loading valid LM data from {}'.format(valid_lm_path))
-    valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path)
+    valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path,
+                                            x_vocab=vocab_emb)
     logger.debug('- Loading train DM data from {}'.format(train_dm_path))
     train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path,
                                            l_vocab=vocab_emb)
-    logger.info('Loading data completed')
 
     opt_lm.vocab_size = vocab_lm.vocab_size
     opt_dm.vocab_size = vocab_dm.vocab_size
     opt_dm.num_steps = train_dm_iter._max_seq_len
+
+    if opt_lm.shared_emb_lm_logit:
+        logger.debug('-- Vocab mask detected, reloading LM data...')
+        lm_vocab_mask = data_utils.Vocabulary.create_vocab_mask(vocab_lm, vocab_emb)
+        train_lm_iter = data_utils.DataIterator(vocab_emb, train_lm_path)
+        valid_lm_iter = data_utils.DataIterator(vocab_emb, valid_lm_path)
+        opt_lm.vocab_size = vocab_emb.vocab_size
+        opt_lm.logit_mask = lm_vocab_mask
+    logger.info('Loading data completed')
 
     init_scale = opt_lm.init_scale
     sess_config =tf.ConfigProto(log_device_placement=False)
@@ -138,6 +147,8 @@ def main(opt_lm, opt_dm):
             emb_array = cPickle.load(ifp)
             dm_emb_init = tf.constant(emb_array, dtype=tf.float32)
         opt_lm.input_emb_vars = shared_emb_vars
+        if opt_lm.shared_emb_lm_logit:
+            opt_lm.softmax_w_vars = shared_emb_vars
         opt_dm.af_ex_emb_vars = shared_emb_vars
         opt_dm.input_emb_init = dm_emb_init
         opt_dm.input_emb_trainable = False
@@ -229,6 +240,10 @@ if __name__ == "__main__":
     parser.add_argument('--shared_emb_vocab', type=str,
                         default='data/ptb/preprocess/vocab.txt',
                         help='vocab file for shared emb')
+    parser.add_argument('--shared_emb_lm_logit', dest='shared_emb_lm_logit',
+                        action='store_true',
+                        help=('use shared emb for lm logit weight'))
+    parser.set_defaults(shared_emb_lm_logit=False)
 
     args = parser.parse_args()
     opt_lm = common_utils.Bunch.default_model_options()

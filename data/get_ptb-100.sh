@@ -18,4 +18,6 @@ for RATE in $DROP_RATES; do
   python ../preprocess/drop_lines.py ptb-100/drop_$RATE/train.txt $RATE ptb-100/ptb-100-control-words.txt ptb-100/tmp
   mv ptb-100/tmp ptb-100/drop_$RATE/train.txt
   python ../preprocess/preprocess_text.py ptb-100/drop_$RATE stopwords.txt --bow_vocab_size 2000
+  mv ptb-100/drop_$RATE/preprocess/vocab.txt ptb-100/drop_$RATE/preprocess/local_vocab.txt
+  cp ptb/preprocess/vocab.txt ptb-100/drop_$RATE/preprocess/
 done

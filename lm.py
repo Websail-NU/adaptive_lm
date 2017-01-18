@@ -161,7 +161,9 @@ class LM(object):
 
     def _logit_mask(self, opt):
         mask = opt.logit_mask
-        return tf.reshape(tf.constant((mask - 1) * 100000, name="logit_mask"),
+        return tf.reshape(tf.constant((mask - 1) * 100000,
+                                      name="logit_mask",
+                                      dtype=tf.float32),
                           [1, -1])
 
     def _softmax_loss_graph(self, opt, softmax_size, state, y, w):
@@ -173,7 +175,7 @@ class LM(object):
             with tf.variable_scope("softmax_w"):
                 full_softmax_w = tf.reshape(
                     tf.concat(1, softmax_w), [-1, softmax_size])
-                full_softmax_w = full_softmax_w[:opt.vocab_size, :]
+                # full_softmax_w = full_softmax_w[:opt.vocab_size, :]
             logits = tf.matmul(
                 state, full_softmax_w, transpose_b=True) + softmax_b
             if hasattr(opt, 'logit_mask'):
