@@ -150,19 +150,34 @@ class LM(object):
     def _modified_rnn_state_graph(self, opt, rnn_state):
         return rnn_state, opt.state_size
 
+    def _softmax_w(self, opt, softmax_size):
+        softmax_w = None
+        if hasattr(opt, 'softmax_w_vars'):
+            softmax_w = opt.softmax_w_vars
+        else:
+            softmax_w = sharded_variable(
+                "softmax_w", [opt.vocab_size, softmax_size], opt.num_shards)
+        return softmax_w
+
+    def _logit_mask(self, opt):
+        mask = opt.logit_mask
+        return tf.reshape(tf.constant((mask - 1) * 100000, name="logit_mask"),
+                          [1, -1])
+
     def _softmax_loss_graph(self, opt, softmax_size, state, y, w):
         """ Create softmax and loss graph """
-        softmax_w = sharded_variable(
-            "softmax_w", [opt.vocab_size, softmax_size], opt.num_shards)
+        softmax_w = self._softmax_w(opt, softmax_size)
         softmax_b = tf.get_variable("softmax_b", [opt.vocab_size])
+        # only sample when training
         if opt.num_softmax_sampled == 0 or not self.is_training:
-            # only sample when training
             with tf.variable_scope("softmax_w"):
                 full_softmax_w = tf.reshape(
                     tf.concat(1, softmax_w), [-1, softmax_size])
                 full_softmax_w = full_softmax_w[:opt.vocab_size, :]
             logits = tf.matmul(
                 state, full_softmax_w, transpose_b=True) + softmax_b
+            if hasattr(opt, 'logit_mask'):
+                logits = logits + self._logit_mask(opt)
             targets = tf.reshape(y, [-1])
             loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits, targets)
