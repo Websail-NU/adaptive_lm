@@ -349,6 +349,8 @@ class SentenceIterator(DataIterator):
                     break
         return self.x, self.y, self.w, self.l, self.seq_len
 
+    def is_new_sen(self):
+        return self._new_sentence_set
 ######################################################
 # TokenFeatureIterator
 ######################################################

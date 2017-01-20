@@ -158,6 +158,12 @@ def get_common_argparse():
                         help=('Reset RNN state for each minibatch, '
                               '(always reset state every epoch).'))
     parser.set_defaults(reset_state=False)
+    parser.add_argument('--sen_independent', dest='sen_independent',
+                        action='store_true',
+                        help=('Training RNN with padded batch, '
+                              'and reset state every time a batch '
+                              'comes from new sentences.'))
+    parser.set_defaults(sen_independent=False)
     # Parameters for gradient descent.
     parser.add_argument('--max_grad_norm', type=float, default=10.,
                         help='clip global grad norm')

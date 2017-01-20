@@ -37,16 +37,26 @@ def main(opt):
     vocab_emb= data_utils.Vocabulary.from_vocab_file(vocab_emb_path)
     logger.debug('-- Shared emb vocab size: {}'.format(vocab_emb.vocab_size))
     logger.debug('-- vocab size: {}'.format(vocab.vocab_size))
-    logger.debug('- Loading train data from {}'.format(train_path))
-    train_iter = data_utils.DataIterator(vocab, train_path)
-    logger.debug('- Loading valid data from {}'.format(valid_path))
-    valid_iter = data_utils.DataIterator(vocab, valid_path)
+    if opt.shared_emb_lm_logit:
+        logger.debug('- Loading train data from {}'.format(train_path))
+        train_iter = data_utils.SentenceIterator(vocab, train_path)
+        logger.debug('- Loading valid data from {}'.format(valid_path))
+        valid_iter = data_utils.SentenceIterator(vocab, valid_path)
+    else:
+        logger.debug('- Loading train data from {}'.format(train_path))
+        train_iter = data_utils.DataIterator(vocab, train_path)
+        logger.debug('- Loading valid data from {}'.format(valid_path))
+        valid_iter = data_utils.DataIterator(vocab, valid_path)
     opt.vocab_size = vocab.vocab_size
     if opt.shared_emb_lm_logit:
         logger.debug('-- Vocab mask detected, reloading LM data...')
         lm_vocab_mask = data_utils.Vocabulary.create_vocab_mask(vocab, vocab_emb)
-        train_iter = data_utils.DataIterator(vocab_emb, train_path)
-        valid_iter = data_utils.DataIterator(vocab_emb, valid_path)
+        if opt.sen_independent:
+            train_iter = data_utils.SentenceIterator(vocab_emb, train_path)
+            valid_iter = data_utils.SentenceIterator(vocab_emb, valid_path)
+        else:
+            train_iter = data_utils.DataIterator(vocab_emb, train_path)
+            valid_iter = data_utils.DataIterator(vocab_emb, valid_path)
         opt.vocab_size = vocab_emb.vocab_size
         opt.logit_mask = lm_vocab_mask
     logger.info('Loading data completed')

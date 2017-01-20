@@ -125,11 +125,15 @@ def run_epoch(sess, m, data_iter, opt,
             f_state_start += 1
         fetches.append(train_op)
         if not opt.reset_state:
+            if opt.sen_independent and data_iter.is_new_sen():
+                state = []
+                for c, h in m.initial_state:
+                    state.append((c.eval(), h.eval()))
+            for i, (c, h) in enumerate(m.initial_state):
+                feed_dict[c], feed_dict[h] = state[i]
             for c, h in m.final_state:
                 fetches.append(c)
                 fetches.append(h)
-            for i, (c, h) in enumerate(m.initial_state):
-                feed_dict[c], feed_dict[h] = state[i]
         res = sess.run(fetches, feed_dict)
         cost = res[0]
         if not opt.reset_state:

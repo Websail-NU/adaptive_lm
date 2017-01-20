@@ -66,6 +66,10 @@ def run_joint_epoch(sess, train_lm, train_dm,
                      train_lm.w: w, train_lm.seq_len: seq_len,
                      train_dm.x: def_x, train_dm.y: def_y, train_dm.l: def_l,
                      train_dm.w: def_w, train_dm.seq_len: def_seq_len}
+        if opt.sen_independent and lm_iter.is_new_sen():
+            state_lm = []
+            for c, h in train_lm.initial_state:
+                state_lm.append((c.eval(), h.eval()))
         for i, (c, h) in enumerate(train_lm.initial_state):
             feed_dict[c], feed_dict[h] = state_lm[i]
         for i, (c, h) in enumerate(train_dm.initial_state):
@@ -106,12 +110,20 @@ def main(opt_lm, opt_dm):
     logger.debug('- Loading vocab DM from {}'.format(vocab_dm_path))
     vocab_dm = data_utils.Vocabulary.from_vocab_file(vocab_dm_path)
     logger.debug('-- DM vocab size: {}'.format(vocab_dm.vocab_size))
-    logger.debug('- Loading train LM data from {}'.format(train_lm_path))
-    train_lm_iter = data_utils.DataIterator(vocab_lm, train_lm_path,
-                                            x_vocab=vocab_emb)
-    logger.debug('- Loading valid LM data from {}'.format(valid_lm_path))
-    valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path,
-                                            x_vocab=vocab_emb)
+    if opt_lm.sen_independent:
+        logger.debug('- Loading train LM data from {}'.format(train_lm_path))
+        train_lm_iter = data_utils.SentenceIterator(vocab_lm, train_lm_path,
+                                                x_vocab=vocab_emb)
+        logger.debug('- Loading valid LM data from {}'.format(valid_lm_path))
+        valid_lm_iter = data_utils.SentenceIterator(vocab_lm, valid_lm_path,
+                                                x_vocab=vocab_emb)
+    else:
+        logger.debug('- Loading train LM data from {}'.format(train_lm_path))
+        train_lm_iter = data_utils.DataIterator(vocab_lm, train_lm_path,
+                                                x_vocab=vocab_emb)
+        logger.debug('- Loading valid LM data from {}'.format(valid_lm_path))
+        valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path,
+                                                x_vocab=vocab_emb)
     logger.debug('- Loading train DM data from {}'.format(train_dm_path))
     train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path,
                                            l_vocab=vocab_emb)
@@ -123,8 +135,12 @@ def main(opt_lm, opt_dm):
     if opt_lm.shared_emb_lm_logit:
         logger.debug('-- Vocab mask detected, reloading LM data...')
         lm_vocab_mask = data_utils.Vocabulary.create_vocab_mask(vocab_lm, vocab_emb)
-        train_lm_iter = data_utils.DataIterator(vocab_emb, train_lm_path)
-        valid_lm_iter = data_utils.DataIterator(vocab_emb, valid_lm_path)
+        if opt_lm.sen_independent:
+            train_lm_iter = data_utils.SentenceIterator(vocab_emb, train_lm_path)
+            valid_lm_iter = data_utils.SentenceIterator(vocab_emb, valid_lm_path)
+        else:
+            train_lm_iter = data_utils.DataIterator(vocab_emb, train_lm_path)
+            valid_lm_iter = data_utils.DataIterator(vocab_emb, valid_lm_path)
         opt_lm.vocab_size = vocab_emb.vocab_size
         opt_lm.logit_mask = lm_vocab_mask
     logger.info('Loading data completed')
@@ -251,7 +267,7 @@ if __name__ == "__main__":
     opt_dm = common_utils.Bunch.default_model_options()
     opt_dm.update_from_ns(args)
     opt_dm.af_function = 'ex_emb'
-    opt_dm.varied_len = True
+    # opt_dm.varied_len = True
     opt_dm.reset_state = True
     opt_dm.data_dir = opt_dm.def_dir
     logger = common_utils.get_logger(opt_lm.log_file_path)
