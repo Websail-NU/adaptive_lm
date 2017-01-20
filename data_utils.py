@@ -174,27 +174,32 @@ class DataIterator(object):
 
     def _append_data_if_vocab(self, doc, vocab, data):
         if vocab is None:
-            return 0
+            return 0, 0
         seq_len = 0
+        num_lines = 0
         for s in doc['lines']:
             sen = self._parse_sentence(s, vocab)
             seq_len += len(sen)
+            num_lines += 1
             data.extend(sen)
-        return seq_len
+        return seq_len, num_lines
 
     def _parse_file(self, filepath):
         data, data_x, data_y, label_idx, label_keys  = [], [], [], [], []
         max_seq_len = 0
+        num_lines = 0
         with open(filepath) as ifp:
             for line in ifp:
                 doc = json.loads(line)
                 label_idx.append(len(data))
                 label_keys.append(doc['key'])
-                seq_len = self._append_data_if_vocab(doc, self._vocab, data)
-                _ = self._append_data_if_vocab(doc, self._x_vocab, data_x)
-                _ = self._append_data_if_vocab(doc, self._y_vocab, data_y)
+                seq_len, lines = self._append_data_if_vocab(
+                    doc, self._vocab, data)
+                _, __ = self._append_data_if_vocab(doc, self._x_vocab, data_x)
+                _, __ = self._append_data_if_vocab(doc, self._y_vocab, data_y)
                 if seq_len > max_seq_len:
                     max_seq_len = seq_len
+                num_lines += lines
         self._data = np.array(data, np.int32)
         if len(data_x) == 0:
             self._data_x = self._data
@@ -207,6 +212,7 @@ class DataIterator(object):
         self._lidx = label_idx
         self._lkeys = label_keys
         self._max_seq_len = max_seq_len
+        self._num_lines = num_lines
 
     def _find_label(self, data_pointer):
         return self._lkeys[bisect_right(self._lidx, data_pointer) - 1]
@@ -261,6 +267,87 @@ class DataIterator(object):
             if x is None:
                 break
             yield x, y, w, l, seq_len
+
+######################################################
+# Setnence Iterator
+######################################################
+
+class SentenceIterator(DataIterator):
+    """
+    Iterate over sentence with padding, add is_new_sen() to check whether the
+    current batch from a new set of sentences.
+
+    kwargs:
+    """
+
+    def __init__(self, vocab=None, file_path=None, **kwargs):
+        super(SentenceIterator, self).__init__(vocab, file_path, **kwargs)
+        self._sen_idx = [0]
+        eos_id = self._vocab.eos_id
+        for i, wid in enumerate(self._data):
+            if wid == eos_id and i + 1 < len(self._data):
+                self._sen_idx.append(i+1)
+
+    def init_batch(self, batch_size, num_steps):
+        if num_steps < 1:
+            warnings.warn("num_steps has to be more than 0.")
+        self._batch_sen_idx = list(self._sen_idx)
+        random.shuffle(self._batch_sen_idx)
+        self._batch_size = batch_size
+        self._num_steps = num_steps
+        self.x = np.zeros([batch_size, num_steps], np.int32)
+        self.y = np.zeros([batch_size, num_steps], np.int32)
+        self.w = np.zeros([batch_size, num_steps], np.uint8)
+        self.l = [[None for _ in range(num_steps)] for _ in range(batch_size)]
+        self.seq_len = np.zeros([batch_size], np.int32)
+        self._pointers = np.zeros([batch_size], np.int32)
+        distance = len(self._sen_idx) / batch_size
+        # XXX: this will cut off the left-over sentence
+        for i in range(batch_size):
+            self._pointers[i] = i * distance
+        self._epoch_sentences = distance
+        self._read_sentences = np.array([0 for _ in range(batch_size)],
+                                        dtype=np.int32)
+        self._read_tokens = np.array([0 for _ in range(batch_size)],
+                                     dtype=np.int32)
+        self._new_sentence_set = True
+
+    def next_batch(self):
+        # increment sentence
+        if self._read_tokens.sum() == -1 * self._batch_size:
+            self._new_sentence_set = True
+            self._pointers[:] += 1
+            self._read_sentences[:] += 1
+            self._read_tokens[:] = 0
+            if any(t >= self._epoch_sentences for t in self._read_sentences):
+                return None, None, None, None, None
+        elif self._read_tokens.sum() == 0:
+            self._new_sentence_set = True
+        else:
+            self._new_sentence_set = False
+        # reset old data
+        self.x[:], self.y[:] = self._padding_id, self._padding_id
+        self.w[:], self.seq_len[:] = 0, 0
+        for i in range(len(self.l)):
+            for j in range(len(self.l[0])):
+                self.l[i][j] = -1
+        # populating new data
+        for i_batch in range(self._batch_size):
+            cur_pos = self._batch_sen_idx[self._pointers[i_batch]]
+            cur_pos += self._read_tokens[i_batch]
+            for i_step in range(self._num_steps):
+                if self._read_tokens[i_batch] == -1:
+                    break
+                self.x[i_batch, i_step] = self._data_x[cur_pos + i_step]
+                self.y[i_batch, i_step] = self._data_y[cur_pos + i_step + 1]
+                self.w[i_batch, i_step] = 1
+                self.seq_len[i_batch] += 1
+                self._read_tokens[i_batch] += 1
+                self.l[i_batch][i_step] = self._find_label(cur_pos + i_step)
+                if self._data[cur_pos +i_step + 1] == self._vocab.eos_id:
+                    self._read_tokens[i_batch] = -1
+                    break
+        return self.x, self.y, self.w, self.l, self.seq_len
 
 ######################################################
 # TokenFeatureIterator
