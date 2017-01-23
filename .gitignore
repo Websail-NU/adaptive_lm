@@ -1,6 +1,8 @@
 data/CBTest
 data/ptb
 data/ptb_defs
+data/common_defs_v1.2
+data/ptb-100
 .ipynb_checkpoints/
 *.pyc
 

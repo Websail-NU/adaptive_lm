@@ -5,8 +5,8 @@ import tensorflow as tf
 Todo:
     - Choosing optimizer from options
     - Support other types of cells
-    - Refactor LMwAF
-    - Support gated_state in LMwAF
+    - Refactor LMwAF._extract_features
+    - Add char-CNN
 """
 
 # \[T]/ PRAISE THE SUN!
@@ -21,12 +21,17 @@ def find_trainable_variables(top_scope, key):
     return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                              "{}/.*{}.*".format(top_scope, key))
 
-def sharded_variable(name, shape, num_shards,
-                     dtype=tf.float32):
+def sharded_variable(name, shape, num_shards, trainable=True,
+                     dtype=tf.float32, initializer=None):
     # The final size of the sharded variable may be larger than requested.
     # This should be fine for embeddings.
     shard_size = int((shape[0] + num_shards - 1) / num_shards)
-    initializer = tf.uniform_unit_scaling_initializer(dtype=dtype)
+    if initializer is None:
+        initializer = tf.uniform_unit_scaling_initializer(dtype=dtype)
+    if isinstance(initializer, tf.Tensor):
+        return [tf.get_variable(name+"_0",
+                                initializer=initializer,
+                                dtype=dtype, trainable=trainable)]
     return [tf.get_variable(name + "_%d" % i,
                             [shard_size, shape[1]],
                             initializer=initializer,
@@ -38,6 +43,7 @@ def train_op(model, opt):
     global_step = tf.get_variable("global_step", [], tf.float32,
                                   initializer=tf.zeros_initializer,
                                   trainable=False)
+    # TODO: Support other optimizer
     optimizer = tf.train.GradientDescentOptimizer(lr)
     train_op = optimizer.apply_gradients(
         zip(model.grads, model.vars),
@@ -46,8 +52,9 @@ def train_op(model, opt):
 
 class LM(object):
 
-    def __init__(self, opt, is_training=True):
+    def __init__(self, opt, is_training=True, create_grads=True):
         self.is_training = is_training
+        self.create_grads = create_grads
         self.opt = opt
         self._create_input_placeholder(opt)
         self._top_scope = tf.get_variable_scope().name
@@ -70,15 +77,14 @@ class LM(object):
             The method creates loss and grads for running and training.
         """
         self.loss = self._forward(opt, self.x, self.y, self.w)
-        if self.is_training:
+        if self.is_training and self.create_grads:
             self.grads, self.vars = self._backward(opt, self.loss)
 
     def _forward(self, opt, x, y, w):
         """ Create forward graph. """
         w = tf.to_float(w)
         # Embedding
-        self._emb_vars = sharded_variable(
-            "emb", [opt.vocab_size, opt.emb_size], opt.num_shards)
+        self._emb_vars = self._input_emb(opt)
         # Input
         self._inputs = self._input_graph(opt, self._emb_vars, x)
         # RNN
@@ -91,6 +97,22 @@ class LM(object):
         loss, self._all_losses = self._softmax_loss_graph(
             opt, softmax_size, self._rnn_output, y, w)
         return loss
+
+    def _input_emb(self, opt):
+        """ Create embedding variable or reuse set at opt.input_emb_vars
+        """
+        emb_vars = None
+        if hasattr(opt, 'input_emb_vars'):
+            emb_vars = opt.input_emb_vars
+        elif hasattr(opt, 'input_emb_init'):
+            emb_vars = sharded_variable(
+                "emb", [1,1], 1, initializer=opt.input_emb_init,
+                trainable=opt.input_emb_trainable)
+        else:
+            emb_vars = sharded_variable(
+                "emb", [opt.vocab_size, opt.emb_size], opt.num_shards,
+                trainable=opt.input_emb_trainable)
+        return emb_vars
 
     def _input_graph(self, opt, emb_vars, x):
         """ Create input graph before the RNN """
@@ -107,7 +129,7 @@ class LM(object):
     def _rnn_graph(self, opt, inputs):
         """ Create RNN graph """
         with tf.variable_scope("rnn") as vs:
-            # XXX: Support other types of cells
+            # TODO: Support other types of cells
             cell = tf.nn.rnn_cell.BasicLSTMCell(opt.state_size)
             if self.is_training and opt.keep_prob < 1.0:
                 cell = tf.nn.rnn_cell.DropoutWrapper(
@@ -128,19 +150,36 @@ class LM(object):
     def _modified_rnn_state_graph(self, opt, rnn_state):
         return rnn_state, opt.state_size
 
+    def _softmax_w(self, opt, softmax_size):
+        softmax_w = None
+        if hasattr(opt, 'softmax_w_vars'):
+            softmax_w = opt.softmax_w_vars
+        else:
+            softmax_w = sharded_variable(
+                "softmax_w", [opt.vocab_size, softmax_size], opt.num_shards)
+        return softmax_w
+
+    def _logit_mask(self, opt):
+        mask = opt.logit_mask
+        return tf.reshape(tf.constant((mask - 1) * 100000,
+                                      name="logit_mask",
+                                      dtype=tf.float32),
+                          [1, -1])
+
     def _softmax_loss_graph(self, opt, softmax_size, state, y, w):
         """ Create softmax and loss graph """
-        softmax_w = sharded_variable(
-            "softmax_w", [opt.vocab_size, softmax_size], opt.num_shards)
+        softmax_w = self._softmax_w(opt, softmax_size)
         softmax_b = tf.get_variable("softmax_b", [opt.vocab_size])
+        # only sample when training
         if opt.num_softmax_sampled == 0 or not self.is_training:
-            # only sample when training
             with tf.variable_scope("softmax_w"):
                 full_softmax_w = tf.reshape(
                     tf.concat(1, softmax_w), [-1, softmax_size])
-                full_softmax_w = full_softmax_w[:opt.vocab_size, :]
+                # full_softmax_w = full_softmax_w[:opt.vocab_size, :]
             logits = tf.matmul(
                 state, full_softmax_w, transpose_b=True) + softmax_b
+            if hasattr(opt, 'logit_mask'):
+                logits = logits + self._logit_mask(opt)
             targets = tf.reshape(y, [-1])
             loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits, targets)
@@ -160,7 +199,7 @@ class LM(object):
             Return clipped gradients and trainable variables
         """
         loss = loss * opt.num_steps
-        emb_vars, rnn_vars, softmax_vars, other_vars = self._get_variables()
+        emb_vars, rnn_vars, softmax_vars, other_vars = self._get_variables(opt)
         all_vars = emb_vars + rnn_vars + softmax_vars + other_vars
         grads = tf.gradients(loss, all_vars)
         orig_grads = grads[:]
@@ -183,8 +222,12 @@ class LM(object):
         assert len(clipped_grads) == len(orig_grads)
         return clipped_grads, all_vars
 
-    def _get_variables(self):
-        emb_vars = find_trainable_variables(self._top_scope, "emb")
+    def _get_variables(self, opt):
+        emb_vars = None
+        if hasattr(opt, 'input_emb_vars'):
+            emb_vars = opt.input_emb_vars
+        else:
+            emb_vars = find_trainable_variables(self._top_scope, "emb")
         rnn_vars = find_trainable_variables(self._top_scope, "rnn")
         softmax_vars = find_trainable_variables(self._top_scope, "softmax")
         other_vars = self._get_additional_variables()
@@ -247,16 +290,16 @@ class LMwAF(LM):
         return outputs, opt.state_size
 
     def _extract_features(self, opt, l):
-        # XXX: placeholder for later refactor
+        # TODO: placeholder for later refactor
         af_function = 'lm_emb'
         if opt.is_set('af_function'):
             af_function = opt.af_function
 
         if af_function == 'lm_emb':
-            self._af_size = opt.emb_size
             l = tf.nn.embedding_lookup(self._emb_vars, l)
+        elif af_function == 'ex_emb':
+            l = tf.nn.embedding_lookup(opt.af_ex_emb_vars, l)
         elif af_function == 'emb':
-            self._af_size = opt.af_emb_size
             with tf.variable_scope("afeatures"):
                 initializer = tf.uniform_unit_scaling_initializer(
                     dtype=tf.float32)
@@ -279,9 +322,11 @@ class LMwAF(LM):
                 else:
                     self.af_emb_var = af_emb_vars
                 l = tf.nn.embedding_lookup(self.af_emb_var, l)
+        self._af_size = l.get_shape()[2].value
         if 'emb' in af_function:
                 if self.is_training and opt.emb_keep_prob < 1.0:
                     l = tf.nn.dropout(l, opt.emb_keep_prob)
+        # TODO: add char-CNN
         return l
 
     def _get_additional_variables(self):

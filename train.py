@@ -28,15 +28,39 @@ def main(opt):
     vocab_path = os.path.join(opt.data_dir, opt.vocab_file)
     train_path = os.path.join(opt.data_dir, opt.train_file)
     valid_path = os.path.join(opt.data_dir, opt.valid_file)
+    vocab_emb_path = opt.shared_emb_vocab
     logger.info('Loading data set...')
     logger.debug('- Loading vocab from {}'.format(vocab_path))
     vocab = data_utils.Vocabulary.from_vocab_file(vocab_path)
     logger.debug('-- vocab size: {}'.format(vocab.vocab_size))
-    logger.debug('- Loading train data from {}'.format(train_path))
-    train_iter = data_utils.DataIterator(vocab, train_path)
-    logger.debug('- Loading valid data from {}'.format(valid_path))
-    valid_iter = data_utils.DataIterator(vocab, valid_path)
+    logger.debug('- Loading vocab shared emb from {}'.format(vocab_emb_path))
+    vocab_emb= data_utils.Vocabulary.from_vocab_file(vocab_emb_path)
+    logger.debug('-- Shared emb vocab size: {}'.format(vocab_emb.vocab_size))
+    logger.debug('-- vocab size: {}'.format(vocab.vocab_size))
+    if opt.sen_independent:
+        logger.debug('- Loading train data from {}'.format(train_path))
+        train_iter = data_utils.SentenceIterator(vocab, train_path)
+        logger.debug('- Loading valid data from {}'.format(valid_path))
+        valid_iter = data_utils.SentenceIterator(vocab, valid_path)
+    else:
+        logger.debug('- Loading train data from {}'.format(train_path))
+        train_iter = data_utils.DataIterator(vocab, train_path)
+        logger.debug('- Loading valid data from {}'.format(valid_path))
+        valid_iter = data_utils.DataIterator(vocab, valid_path)
     opt.vocab_size = vocab.vocab_size
+    if opt.shared_emb_lm_logit:
+        logger.debug('-- Vocab mask detected, reloading LM data...')
+        lm_vocab_mask = data_utils.Vocabulary.create_vocab_mask(vocab, vocab_emb)
+        if opt.sen_independent:
+            train_iter = data_utils.SentenceIterator(vocab_emb, train_path)
+            valid_iter = data_utils.SentenceIterator(vocab_emb, valid_path)
+        else:
+            train_iter = data_utils.DataIterator(vocab_emb, train_path)
+            valid_iter = data_utils.DataIterator(vocab_emb, valid_path)
+        opt.vocab_size = vocab_emb.vocab_size
+        opt.logit_mask = lm_vocab_mask
+    logger.info('Loading data completed')
+
     logger.debug('Staring session...')
     with tf.Session() as sess:
         logger.info('Creating model...')
@@ -44,6 +68,14 @@ def main(opt):
         logger.debug(
             '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
+        logger.debug('- Creating shared embedding variables...')
+        if opt.shared_emb_lm_logit:
+            with tf.variable_scope('shared_emb'):
+                shared_emb_vars = lm.sharded_variable(
+                    'emb', [vocab_emb.vocab_size, opt.emb_size],
+                    opt.num_shards)
+            opt.input_emb_vars = shared_emb_vars
+            opt.softmax_w_vars = shared_emb_vars
         logger.debug('- Creating training model...')
         with tf.variable_scope('LM', reuse=None, initializer=initializer):
             model = lm.LM(opt)
@@ -113,6 +145,13 @@ def main(opt):
 if __name__ == "__main__":
     global_time = time.time()
     parser = common_utils.get_common_argparse()
+    parser.add_argument('--shared_emb_vocab', type=str,
+                        default='data/ptb/preprocess/vocab.txt',
+                        help='vocab file for shared emb')
+    parser.add_argument('--shared_emb_lm_logit', dest='shared_emb_lm_logit',
+                        action='store_true',
+                        help=('use shared emb for lm logit weight'))
+    parser.set_defaults(shared_emb_lm_logit=False)
     args = parser.parse_args()
     opt = common_utils.Bunch.default_model_options()
     opt.update_from_ns(args)
