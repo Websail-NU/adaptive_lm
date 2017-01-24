@@ -27,7 +27,8 @@ def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
         global_step = tf.get_variable("global_step", [], tf.float32,
                                       initializer=tf.zeros_initializer,
                                       trainable=False)
-        optimizer = tf.train.GradientDescentOptimizer(lr)
+        # optimizer = tf.train.GradientDescentOptimizer(lr)
+        optimizer = tf.train.AdamOptimizer(lr)
         g_v_pairs = optimizer.compute_gradients(joint_loss)
         grads, tvars = [], []
         for g,v in g_v_pairs:

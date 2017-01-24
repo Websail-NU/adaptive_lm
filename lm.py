@@ -44,7 +44,8 @@ def train_op(model, opt):
                                   initializer=tf.zeros_initializer,
                                   trainable=False)
     # TODO: Support other optimizer
-    optimizer = tf.train.GradientDescentOptimizer(lr)
+    # optimizer = tf.train.GradientDescentOptimizer(lr)
+    optimizer = tf.train.AdamOptimizer(lr)
     train_op = optimizer.apply_gradients(
         zip(model.grads, model.vars),
         global_step=global_step)
