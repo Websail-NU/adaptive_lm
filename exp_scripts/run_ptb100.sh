@@ -17,7 +17,7 @@ for RATE in $DROP_RATES; do
   EXP_DIR="experiments/ptb-100/"$RATE"-reset/"
   rm_if_exist -r $EXP_DIR
   mkdir -p $EXP_DIR
-  ipython -- train.py $MODEL_OPTIONS $TRAIN_OPTIONS --log_file_path $EXP_DIR"training.log" --output_dir $EXP_DIR --data_dir data/ptb-100/drop_$RATE/preprocess/
+  ipython -- train.py $MODEL_OPTIONS $TRAIN_OPTIONS --log_file_path $EXP_DIR"training.log" --output_dir $EXP_DIR --data_dir data/ptb-100/drop_$RATE/preprocess/ --shared_emb_vocab $SHARED_EMB_VOCAB
 
   EXP_DIR="experiments/ptb-100/"$RATE"-reset-shared/"
   rm_if_exist -r $EXP_DIR

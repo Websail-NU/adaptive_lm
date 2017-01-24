@@ -309,7 +309,7 @@ class SentenceIterator(DataIterator):
         if num_steps < 1:
             warnings.warn("num_steps has to be more than 0.")
         self._batch_sen_idx = list(self._sen_idx)
-        # random.shuffle(self._batch_sen_idx)
+        random.shuffle(self._batch_sen_idx)
         self._batch_size = batch_size
         self._num_steps = num_steps
         self.x = np.zeros([batch_size, num_steps], np.int32)
