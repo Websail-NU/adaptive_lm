@@ -152,14 +152,21 @@ class DataIterator(object):
     kwargs:
         * x_vocab: Vocabulary for inputs
         * y_vocab: Vocabulary for targets
+        * sos: Add start of sentence ID (False)
+        * eos: Add end of sentence ID (True)
     """
     def __init__(self, vocab=None, file_path=None, **kwargs):
         self._kwargs = kwargs
         self._x_vocab, self._y_vocab = None, None
+        self._add_sos, self._add_eos = False, True
         if 'x_vocab' in self._kwargs:
             self._x_vocab = self._kwargs['x_vocab']
         if 'y_vocab' in self._kwargs:
             self._y_vocab = self._kwargs['y_vocab']
+        if 'sos' in self._kwargs:
+            self._add_sos = self._kwargs['sos']
+        if 'eos' in self._kwargs:
+            self._add_eos = self._kwargs['eos']
         if vocab is not None:
             self._vocab = vocab
             self._padding_id = vocab.eos_id
@@ -170,7 +177,11 @@ class DataIterator(object):
             vocab = self._vocab
         indexes = [vocab.w2i(word) for word in sentence.split()]
         # return [self._vocab.sos_id] + indexes + [self._vocab.eos_id]
-        return indexes + [vocab.eos_id]
+        if self._add_sos:
+            indexes.insert(0, vocab.sos_id)
+        if self._add_eos:
+            indexes.append(vocab.eos_id)
+        return indexes
 
     def _append_data_if_vocab(self, doc, vocab, data):
         if vocab is None:
@@ -200,15 +211,19 @@ class DataIterator(object):
                 if seq_len > max_seq_len:
                     max_seq_len = seq_len
                 num_lines += lines
+        data.insert(0, self._padding_id)
         self._data = np.array(data, np.int32)
         if len(data_x) == 0:
             self._data_x = self._data
         else:
+            data_x.insert(0, self._x_vocab.eos_id)
             self._data_x = np.array(data_x, np.int32)
         if len(data_y) == 0:
             self._data_y = self._data
         else:
+            data_x.insert(0, self._y_vocab.eos_id)
             self._data_y = np.array(data_y, np.int32)
+
         self._lidx = label_idx
         self._lkeys = label_keys
         self._max_seq_len = max_seq_len
@@ -278,9 +293,11 @@ class SentenceIterator(DataIterator):
     current batch from a new set of sentences.
 
     kwargs:
+        * sos: Add start of sentence ID (Fixed to be True)
     """
 
     def __init__(self, vocab=None, file_path=None, **kwargs):
+        kwargs['sos'] = True
         super(SentenceIterator, self).__init__(vocab, file_path, **kwargs)
         self._sen_idx = [0]
         eos_id = self._vocab.eos_id
@@ -330,7 +347,7 @@ class SentenceIterator(DataIterator):
         self.w[:], self.seq_len[:] = 0, 0
         for i in range(len(self.l)):
             for j in range(len(self.l[0])):
-                self.l[i][j] = -1
+                self.l[i][j] = None
         # populating new data
         for i_batch in range(self._batch_size):
             cur_pos = self._batch_sen_idx[self._pointers[i_batch]]
@@ -344,9 +361,8 @@ class SentenceIterator(DataIterator):
                 self.seq_len[i_batch] += 1
                 self._read_tokens[i_batch] += 1
                 self.l[i_batch][i_step] = self._find_label(cur_pos + i_step)
-                if self._data[cur_pos +i_step + 1] == self._vocab.eos_id:
+                if self._data[cur_pos + i_step + 1] == self._vocab.eos_id:
                     self._read_tokens[i_batch] = -1
-                    break
         return self.x, self.y, self.w, self.l, self.seq_len
 
     def is_new_sen(self):

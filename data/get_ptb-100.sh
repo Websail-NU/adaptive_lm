@@ -3,7 +3,7 @@
 echo "[1/3] Downloading control words..."
 wget  http://websail-fe.cs.northwestern.edu/downloads/dictdef/ptb-100-control-words.txt
 echo "[2/3] Copying PTB data..."
-DROP_RATES="100 80 60 40 20"
+DROP_RATES="100 80 60 40 20 0"
 SPLITS="train valid test"
 for RATE in $DROP_RATES; do
   mkdir -p ptb-100/drop_$RATE/preprocess
@@ -20,4 +20,5 @@ for RATE in $DROP_RATES; do
   python ../preprocess/preprocess_text.py ptb-100/drop_$RATE stopwords.txt --bow_vocab_size 2000
   mv ptb-100/drop_$RATE/preprocess/vocab.txt ptb-100/drop_$RATE/preprocess/local_vocab.txt
   cp ptb/preprocess/vocab.txt ptb-100/drop_$RATE/preprocess/
+  echo -e "<s>\t0" >>  ptb-100/drop_$RATE/preprocess/vocab.txt
 done
