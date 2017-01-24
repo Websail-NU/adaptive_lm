@@ -29,6 +29,7 @@ def main(opt):
     test_iter = data_utils.DataIterator(vocab, test_path)
     opt.vocab_size = vocab.vocab_size
     logger.debug('Staring session...')
+    # with tf.device("/cpu:0"), tf.Session() as sess:
     with tf.Session() as sess:
         logger.info('Creating model...')
         init_scale = opt.init_scale

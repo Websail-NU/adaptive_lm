@@ -302,7 +302,7 @@ class SentenceIterator(DataIterator):
         self._sen_idx = [0]
         eos_id = self._vocab.eos_id
         for i, wid in enumerate(self._data):
-            if wid == eos_id and i + 1 < len(self._data):
+            if wid == eos_id and i + 1 < len(self._data) and i != 0:
                 self._sen_idx.append(i+1)
 
     def init_batch(self, batch_size, num_steps):
