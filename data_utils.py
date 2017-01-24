@@ -299,17 +299,17 @@ class SentenceIterator(DataIterator):
     def __init__(self, vocab=None, file_path=None, **kwargs):
         kwargs['sos'] = True
         super(SentenceIterator, self).__init__(vocab, file_path, **kwargs)
-        self._sen_idx = [0]
+        self._sen_idx = []
         eos_id = self._vocab.eos_id
         for i, wid in enumerate(self._data):
-            if wid == eos_id and i + 1 < len(self._data) and i != 0:
+            if wid == eos_id and i + 1 < len(self._data) :
                 self._sen_idx.append(i+1)
 
     def init_batch(self, batch_size, num_steps):
         if num_steps < 1:
             warnings.warn("num_steps has to be more than 0.")
         self._batch_sen_idx = list(self._sen_idx)
-        random.shuffle(self._batch_sen_idx)
+        # random.shuffle(self._batch_sen_idx)
         self._batch_size = batch_size
         self._num_steps = num_steps
         self.x = np.zeros([batch_size, num_steps], np.int32)
