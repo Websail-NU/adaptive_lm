@@ -37,19 +37,24 @@ def sharded_variable(name, shape, num_shards, trainable=True,
                             dtype=dtype)
             for i in range(num_shards)]
 
+def get_optimizer(lr_var, optim):
+    optimizer = None
+    if optim == "sgd":
+        optimizer = tf.train.GradientDescentOptimizer(lr_var)
+    elif optim == "adam":
+        optimizer = tf.train.AdamOptimizer(lr_var)
+    else:
+        logger = logging.getLogger("exp")
+        logger.warn('Unsupported optimizer. Use SGD as substitute')
+        optimizer = tf.train.GradientDescentOptimizer(lr_var)
+    return optimizer
+    
 def train_op(model, opt):
     lr = tf.Variable(opt.learning_rate, trainable=False)
     global_step = tf.get_variable("global_step", [], tf.float32,
                                   initializer=tf.zeros_initializer,
                                   trainable=False)
-    if opt.optim == "SGD":
-        optimizer = tf.train.GradientDescentOptimizer(lr)
-    elif opt.optim == "ADAM":
-        optimizer = tf.train.AdamOptimizer(lr)
-    else:
-        logger = logging.getLogger("exp")
-        logger.warn('Unsupported optimizer. Use SGD as substitute')
-        optimizer = tf.train.GradientDescentOptimizer(lr)
+    optimizer = get_optimizer(lr, opt.optim)
     train_op = optimizer.apply_gradients(
         zip(model.grads, model.vars),
         global_step=global_step)
