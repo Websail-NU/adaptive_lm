@@ -15,9 +15,13 @@ import logging
 import time
 import os
 import json
+import random
+random.seed(1234)
 
 import numpy as np
+np.random.seed(1234)
 import tensorflow as tf
+tf.set_random_seed(1234)
 
 import lm
 import common_utils
