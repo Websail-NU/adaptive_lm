@@ -37,15 +37,13 @@ def main(opt):
     vocab_emb= data_utils.Vocabulary.from_vocab_file(vocab_emb_path)
     logger.debug('-- Shared emb vocab size: {}'.format(vocab_emb.vocab_size))
     logger.debug('-- vocab size: {}'.format(vocab.vocab_size))
+    logger.debug('- Loading train data from {}'.format(train_path))
+    logger.debug('- Loading valid data from {}'.format(valid_path))
     if opt.sen_independent:
-        logger.debug('- Loading train data from {}'.format(train_path))
         train_iter = data_utils.SentenceIterator(vocab, train_path)
-        logger.debug('- Loading valid data from {}'.format(valid_path))
         valid_iter = data_utils.SentenceIterator(vocab, valid_path)
     else:
-        logger.debug('- Loading train data from {}'.format(train_path))
         train_iter = data_utils.DataIterator(vocab, train_path)
-        logger.debug('- Loading valid data from {}'.format(valid_path))
         valid_iter = data_utils.DataIterator(vocab, valid_path)
     opt.vocab_size = vocab.vocab_size
     if opt.shared_emb_lm_logit:

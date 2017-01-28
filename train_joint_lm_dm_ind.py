@@ -102,7 +102,7 @@ def main(opt_lm, opt_dm):
     dm_emb_path = os.path.join(opt_dm.data_dir, 'emb.cpickle')
     logger.info('Loading data set...')
     logger.debug('- Loading vocab shared emb from {}'.format(vocab_emb_path))
-    vocab_emb= data_utils.Vocabulary.from_vocab_file(vocab_emb_path)
+    vocab_emb = data_utils.Vocabulary.from_vocab_file(vocab_emb_path)
     logger.debug('-- Shared emb vocab size: {}'.format(vocab_emb.vocab_size))
     logger.debug('- Loading vocab LM from {}'.format(vocab_lm_path))
     vocab_lm = data_utils.Vocabulary.from_vocab_file(vocab_lm_path)
