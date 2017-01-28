@@ -319,10 +319,14 @@ class SentenceIterator(DataIterator):
         self.seq_len = np.zeros([batch_size], np.int32)
         self._pointers = np.zeros([batch_size], np.int32)
         distance = len(self._sen_idx) / batch_size
-        # XXX: this will cut off the left-over sentence
+        left_over = len(self._sen_idx) % batch_size
+        self._distances = np.array([distance for _ in range(batch_size)],
+                                  dtype=np.int32)
+        self._distances[0:left_over] += 1
+        cur_pos = 0
         for i in range(batch_size):
-            self._pointers[i] = i * distance
-        self._epoch_sentences = distance
+            self._pointers[i] = cur_pos
+            cur_pos += self._distances[i]
         self._read_sentences = np.array([0 for _ in range(batch_size)],
                                         dtype=np.int32)
         self._read_tokens = np.array([0 for _ in range(batch_size)],
@@ -336,7 +340,7 @@ class SentenceIterator(DataIterator):
             self._pointers[:] += 1
             self._read_sentences[:] += 1
             self._read_tokens[:] = 0
-            if any(t >= self._epoch_sentences for t in self._read_sentences):
+            if all(self._read_sentences >= self._distances):
                 return None, None, None, None, None
         elif self._read_tokens.sum() == 0:
             self._new_sentence_set = True
@@ -350,6 +354,9 @@ class SentenceIterator(DataIterator):
                 self.l[i][j] = None
         # populating new data
         for i_batch in range(self._batch_size):
+            if self._read_sentences[i_batch] >= self._distances[i_batch]:
+                self._read_tokens[i_batch] = -1
+                continue
             cur_pos = self._batch_sen_idx[self._pointers[i_batch]]
             cur_pos += self._read_tokens[i_batch]
             for i_step in range(self._num_steps):
