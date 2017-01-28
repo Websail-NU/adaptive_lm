@@ -427,9 +427,9 @@ class SenLabelIterator(SentenceIterator):
         self._l_arr = np.zeros([batch_size, num_steps], np.int32)
 
     def next_batch(self):
-        super(SenLabelIterator, self).next_batch()
         self._l_arr[:] = self._padding_id
-        if self.x is None:
+        x,y,w,l,r = super(SenLabelIterator, self).next_batch()
+        if x is None:
             return None, None, None, None, None
         for i in range(self._batch_size):
             for j in range(self._num_steps):
