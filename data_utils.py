@@ -150,15 +150,17 @@ class DataIterator(object):
     Iterate over text data
 
     kwargs:
-        * x_vocab: Vocabulary for inputs
-        * y_vocab: Vocabulary for targets
-        * sos: Add start of sentence ID (False)
-        * eos: Add end of sentence ID (True)
+        * x_vocab: Vocabulary for inputs (default: vocab)
+        * y_vocab: Vocabulary for targets (default: vocab)
+        * sos: Add start of sentence ID (default: False)
+        * eos: Add end of sentence ID (default: True)
+        * shuffle_data: Shuffle data between epoch (default: True)
     """
     def __init__(self, vocab=None, file_path=None, **kwargs):
         self._kwargs = kwargs
         self._x_vocab, self._y_vocab = None, None
         self._add_sos, self._add_eos = False, True
+        self._shuffle_data = True
         if 'x_vocab' in self._kwargs:
             self._x_vocab = self._kwargs['x_vocab']
         if 'y_vocab' in self._kwargs:
@@ -167,6 +169,8 @@ class DataIterator(object):
             self._add_sos = self._kwargs['sos']
         if 'eos' in self._kwargs:
             self._add_eos = self._kwargs['eos']
+        if 'shuffle_data' in self._kwargs:
+            self._shuffle_data = self._kwargs['shuffle_data']
         if vocab is not None:
             self._vocab = vocab
             self._padding_id = vocab.eos_id
@@ -253,7 +257,10 @@ class DataIterator(object):
         for i in range(batch_size):
             self._pointers[i] = cur_pos
             cur_pos += self._distances[i]
-        # random.shuffle(self._pointers)
+        if self._shuffle_data:
+            p = np.random.permutation(self._batch_size)
+            self._pointers = self._pointers[p]
+            self._distances = self._distances[p]
         self._read_tokens = np.zeros([batch_size], np.int32)
 
     def next_batch(self):
@@ -297,11 +304,12 @@ class SentenceIterator(DataIterator):
     current batch from a new set of sentences.
 
     kwargs:
-        * sos: Add start of sentence ID (Fixed to be True)
+        * sos: Add start of sentence ID (default: True)
     """
 
     def __init__(self, vocab=None, file_path=None, **kwargs):
-        kwargs['sos'] = True
+        if 'sos' not in kwargs:
+            kwargs['sos'] = True
         super(SentenceIterator, self).__init__(vocab, file_path, **kwargs)
         self._sen_idx = []
         eos_id = self._vocab.eos_id
@@ -313,7 +321,8 @@ class SentenceIterator(DataIterator):
         if num_steps < 1:
             warnings.warn("num_steps has to be more than 0.")
         self._batch_sen_idx = list(self._sen_idx)
-        random.shuffle(self._batch_sen_idx)
+        if self._shuffle_data:
+            random.shuffle(self._batch_sen_idx)
         self._batch_size = batch_size
         self._num_steps = num_steps
         self.x = np.zeros([batch_size, num_steps], np.int32)
@@ -378,6 +387,58 @@ class SentenceIterator(DataIterator):
 
     def is_new_sen(self):
         return self._new_sentence_set
+
+######################################################
+# SenLabelIterator
+######################################################
+
+class SenLabelIterator(SentenceIterator):
+    """
+    Iterate over sentence with padding, add is_new_sen() to check whether the
+    current batch from a new set of sentences.
+    The labels will be mapped to IDs using label vocab (l_vocab).
+
+    kwargs:
+        * l_vocab: a Vocabulary object (default: vocab)
+        * sos: Add start of sentence ID (default: False)
+        * num_seeds: Number of seed words (default: 2)
+    """
+
+    def __init__(self, vocab=None, file_path=None, **kwargs):
+        self._num_seeds = 2
+        if 'sos' not in kwargs:
+            kwargs['sos'] = False
+        if 'num_seeds' in kwargs:
+            self._num_seeds = kwargs[num_seeds]
+        self._l_vocab = vocab
+        if 'l_vocab' in kwargs:
+            self._l_vocab = kwargs[l_vocab]
+        super(SenLabelIterator, self).__init__(vocab, file_path, **kwargs)
+
+    def _parse_file(self, filepath):
+        super(SenLabelIterator, self)._parse_file(filepath)
+        labels = []
+        for l in self._lkeys:
+            labels.append(self._l_vocab.w2i(l))
+        self._lkeys = labels
+
+    def init_batch(self, batch_size, num_steps):
+        super(SenLabelIterator, self).init_batch(batch_size, num_steps)
+        self._l_arr = np.zeros([batch_size, num_steps], np.int32)
+
+    def next_batch(self):
+        super(SenLabelIterator, self).next_batch()
+        self._l_arr[:] = self._padding_id
+        if self.x is None:
+            return None, None, None, None, None
+        for i in range(self._batch_size):
+            for j in range(self._num_steps):
+                if self.l[i][j] is not None:
+                    self._l_arr[i, j] = self.l[i][j]
+        if self.is_new_sen() and self._num_seeds - 1 > 0:
+            self.w[:, 0:self._num_seeds - 1] = 0
+        return self.x, self.y, self.w, self._l_arr, self.seq_len
+
 ######################################################
 # TokenFeatureIterator
 ######################################################
