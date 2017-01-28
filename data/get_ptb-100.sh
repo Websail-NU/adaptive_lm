@@ -22,3 +22,5 @@ for RATE in $DROP_RATES; do
   cp ptb/preprocess/vocab.txt ptb-100/drop_$RATE/preprocess/
   echo -e "<s>\t0" >>  ptb-100/drop_$RATE/preprocess/vocab.txt
 done
+cp common_defs_v1.2/shortlist/common_defs_ptb_shortlist.txt ptb-100/
+echo -e "<s>" >>  ptb-100/common_defs_ptb_shortlist.txt

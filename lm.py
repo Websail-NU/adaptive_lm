@@ -3,7 +3,6 @@ import tensorflow as tf
 `Rafal Jozefowicz's lm <https://github.com/rafaljozefowicz/lm>`_
 
 Todo:
-    - Choosing optimizer from options
     - Support other types of cells
     - Refactor LMwAF._extract_features
     - Add char-CNN
@@ -38,13 +37,24 @@ def sharded_variable(name, shape, num_shards, trainable=True,
                             dtype=dtype)
             for i in range(num_shards)]
 
+def get_optimizer(lr_var, optim):
+    optimizer = None
+    if optim == "sgd":
+        optimizer = tf.train.GradientDescentOptimizer(lr_var)
+    elif optim == "adam":
+        optimizer = tf.train.AdamOptimizer(lr_var)
+    else:
+        import warnings
+        warnings.warn('Unsupported optimizer. Use sgd as substitute')
+        optimizer = tf.train.GradientDescentOptimizer(lr_var)
+    return optimizer
+
 def train_op(model, opt):
     lr = tf.Variable(opt.learning_rate, trainable=False)
     global_step = tf.get_variable("global_step", [], tf.float32,
                                   initializer=tf.zeros_initializer,
                                   trainable=False)
-    # TODO: Support other optimizer
-    optimizer = tf.train.GradientDescentOptimizer(lr)
+    optimizer = get_optimizer(lr, opt.optim)
     train_op = optimizer.apply_gradients(
         zip(model.grads, model.vars),
         global_step=global_step)

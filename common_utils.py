@@ -138,6 +138,8 @@ def get_common_argparse():
     #                     help='which model to use (rnn, lstm or gru).')
 
     # Parameters to control the training.
+    parser.add_argument('--optim', type=str, default="sgd",
+                        help='Optimization algorithm: sgd or adam')
     parser.add_argument('--max_epochs', type=int, default=50,
                         help='number of maxinum epochs')
     parser.add_argument('--batch_size', type=int, default=32,

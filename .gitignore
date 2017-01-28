@@ -3,6 +3,8 @@ data/ptb
 data/ptb_defs
 data/common_defs_v1.2
 data/ptb-100
+data/wikitext-103
+data/wikitext-2
 .ipynb_checkpoints/
 *.pyc
 
