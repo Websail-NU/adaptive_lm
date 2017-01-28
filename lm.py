@@ -44,11 +44,11 @@ def get_optimizer(lr_var, optim):
     elif optim == "adam":
         optimizer = tf.train.AdamOptimizer(lr_var)
     else:
-        logger = logging.getLogger("exp")
-        logger.warn('Unsupported optimizer. Use SGD as substitute')
+        import warnings
+        warnings.warn('Unsupported optimizer. Use sgd as substitute')
         optimizer = tf.train.GradientDescentOptimizer(lr_var)
     return optimizer
-    
+
 def train_op(model, opt):
     lr = tf.Variable(opt.learning_rate, trainable=False)
     global_step = tf.get_variable("global_step", [], tf.float32,

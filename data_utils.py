@@ -409,10 +409,10 @@ class SenLabelIterator(SentenceIterator):
         if 'sos' not in kwargs:
             kwargs['sos'] = False
         if 'num_seeds' in kwargs:
-            self._num_seeds = kwargs[num_seeds]
+            self._num_seeds = kwargs['num_seeds']
         self._l_vocab = vocab
         if 'l_vocab' in kwargs:
-            self._l_vocab = kwargs[l_vocab]
+            self._l_vocab = kwargs['l_vocab']
         super(SenLabelIterator, self).__init__(vocab, file_path, **kwargs)
 
     def _parse_file(self, filepath):

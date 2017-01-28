@@ -27,7 +27,7 @@ def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
         global_step = tf.get_variable("global_step", [], tf.float32,
                                       initializer=tf.zeros_initializer,
                                       trainable=False)
-        optimizer = get_optimizer(lr, opt_lm.optim)
+        optimizer = lm.get_optimizer(lr, opt_lm.optim)
         g_v_pairs = optimizer.compute_gradients(joint_loss)
         grads, tvars = [], []
         for g,v in g_v_pairs:
@@ -49,7 +49,7 @@ def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
 def run_joint_epoch(sess, train_lm, train_dm,
                     lm_iter, dm_iter, opt, train_op):
     start_time = time.time()
-    dm_iter.init_batch(train_dm.opt.batch_size)
+    dm_iter.init_batch(train_dm.opt.batch_size, train_dm.opt.num_steps)
     cost_lm, cost_dm, num_words_lm, num_words_dm = 0.0, 0.0, 0, 0
     state_lm, state_dm = [], []
     for c, h in train_lm.initial_state:
@@ -60,7 +60,7 @@ def run_joint_epoch(sess, train_lm, train_dm,
         opt.batch_size, opt.num_steps)):
         def_x, def_y, def_w, def_l, def_seq_len = dm_iter.next_batch()
         if def_x is None:
-            dm_iter.init_batch(train_dm.opt.batch_size)
+            dm_iter.init_batch(train_dm.opt.batch_size, train_dm.opt.num_steps)
             def_x, def_y, def_w, def_l, def_seq_len = dm_iter.next_batch()
         feed_dict = {train_lm.x: x, train_lm.y: y,
                      train_lm.w: w, train_lm.seq_len: seq_len,
@@ -70,6 +70,10 @@ def run_joint_epoch(sess, train_lm, train_dm,
             state_lm = []
             for c, h in train_lm.initial_state:
                 state_lm.append((c.eval(), h.eval()))
+        if dm_iter.is_new_sen():
+            state_dm = []
+            for c, h in train_dm.initial_state:
+                state_dm.append((c.eval(), h.eval()))
         for i, (c, h) in enumerate(train_lm.initial_state):
             feed_dict[c], feed_dict[h] = state_lm[i]
         for i, (c, h) in enumerate(train_dm.initial_state):
@@ -78,9 +82,18 @@ def run_joint_epoch(sess, train_lm, train_dm,
         for c, h in train_lm.final_state:
             fetches.append(c)
             fetches.append(h)
+        for c, h in train_dm.final_state:
+            fetches.append(c)
+            fetches.append(h)
         res = sess.run(fetches, feed_dict)
-        state_flat = res[3:3+2*train_lm.opt.num_layers]
-        state_lm = [state_flat[i:i+2] for i in range(0, len(state_flat), 2)]
+        state_lm_start = 3
+        state_lm_end = state_lm_start + 2*train_lm.opt.num_layers
+        state_lm_flat = res[state_lm_start:state_lm_end]
+        state_lm = [state_lm_flat[i:i+2] for i in range(0, len(state_lm_flat), 2)]
+        state_dm_start = state_lm_end
+        state_dm_end = state_dm_start + 2*train_dm.opt.num_layers
+        state_dm_flat = res[state_dm_start:state_dm_end]
+        state_dm = [state_dm_flat[i:i+2] for i in range(0, len(state_dm_flat), 2)]
         cost_lm += res[0]
         cost_dm += res[1]
         num_words_lm += np.sum(w)
@@ -125,7 +138,7 @@ def main(opt_lm, opt_dm):
         valid_lm_iter = data_utils.DataIterator(vocab_lm, valid_lm_path,
                                                 x_vocab=vocab_emb)
     logger.debug('- Loading train DM data from {}'.format(train_dm_path))
-    train_dm_iter = data_utils.DefIterator(vocab_dm, train_dm_path,
+    train_dm_iter = data_utils.SenLabelIterator(vocab_dm, train_dm_path,
                                            l_vocab=vocab_emb)
 
     opt_lm.vocab_size = vocab_lm.vocab_size
