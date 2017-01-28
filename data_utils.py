@@ -243,36 +243,40 @@ class DataIterator(object):
         self.l = [[None for _ in range(num_steps)] for _ in range(batch_size)]
         self.seq_len = np.zeros([batch_size], np.int32)
         self.seq_len[:] = self._num_steps
-        self._pointers = [0] * batch_size
-        distance = len(self._data) / batch_size
+        self._pointers = np.zeros([batch_size], np.int32)
+        distance = (len(self._data) - 1) / batch_size
+        left_over = (len(self._data) - 1) % batch_size
+        self._distances = np.zeros([batch_size], np.int32)
+        self._distances[:] = distance
+        self._distances[0:left_over] += 1
+        cur_pos = 0
         for i in range(batch_size):
-            self._pointers[i] = i * distance
-        random.shuffle(self._pointers)
-        # XXX: this will cut off the left-over data
-        self._epoch_tokens = distance
-        self._read_tokens = [0 for _ in range(batch_size)]
+            self._pointers[i] = cur_pos
+            cur_pos += self._distances[i]
+        # random.shuffle(self._pointers)
+        self._read_tokens = np.zeros([batch_size], np.int32)
 
     def next_batch(self):
-        if any((t + 1) >= self._epoch_tokens for t in self._read_tokens):
+        if all(self._read_tokens >= self._distances):
             return None, None, None, None, None
         # reset old data
-        self.x[:], self.y[:], self.w[:] = self._padding_id, self._padding_id, 0
+        self.x[:], self.y[:] = self._padding_id, self._padding_id
+        self.w[:], self.seq_len[:] = 0, 0
         for i in range(len(self.l)):
             for j in range(len(self.l[0])):
                 self.l[i][j] = -1
         # populating new data
-        for i, p in enumerate(self._pointers):
-            num_tokens = self._num_steps
-            if p + self._num_steps + 1 > len(self._data):
-                num_tokens = len(self._data) - p - 1
-            self.x[i, :num_tokens] = self._data_x[p: p + num_tokens]
-            self.y[i, :num_tokens] = self._data_y[p + 1: p + num_tokens + 1]
-            self.w[i, :num_tokens] = 1
-            for j in range(num_tokens):
-                self.l[i][j] = self._find_label(p + j)
-            # increment pointers
-            self._pointers[i] = p + num_tokens
-            self._read_tokens[i] += num_tokens
+        for i_batch in range(self._batch_size):
+            for i_token in range(self._num_steps):
+                if self._read_tokens[i_batch] >= self._distances[i_batch]:
+                    continue
+                cur_pos = self._pointers[i_batch]
+                self.x[i_batch, i_token] = self._data_x[cur_pos]
+                self.y[i_batch, i_token] = self._data_y[cur_pos + 1]
+                self.w[i_batch, i_token] = 1
+                self.seq_len[i_batch] += 1
+                self._pointers[i_batch] += 1
+                self._read_tokens[i_batch] += 1
         return self.x, self.y, self.w, self.l, self.seq_len
 
     def iterate_epoch(self, batch_size, num_steps=-1):
