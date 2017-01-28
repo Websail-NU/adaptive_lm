@@ -3,7 +3,6 @@ import tensorflow as tf
 `Rafal Jozefowicz's lm <https://github.com/rafaljozefowicz/lm>`_
 
 Todo:
-    - Choosing optimizer from options
     - Support other types of cells
     - Refactor LMwAF._extract_features
     - Add char-CNN
@@ -43,9 +42,14 @@ def train_op(model, opt):
     global_step = tf.get_variable("global_step", [], tf.float32,
                                   initializer=tf.zeros_initializer,
                                   trainable=False)
-    # TODO: Support other optimizer
-    # optimizer = tf.train.GradientDescentOptimizer(lr)
-    optimizer = tf.train.AdamOptimizer(lr)
+    if opt.optim == "SGD":
+        optimizer = tf.train.GradientDescentOptimizer(lr)
+    elif opt.optim == "ADAM":
+        optimizer = tf.train.AdamOptimizer(lr)
+    else:
+        logger = logging.getLogger("exp")
+        logger.warn('Unsupported optimizer. Use SGD as substitute')
+        optimizer = tf.train.GradientDescentOptimizer(lr)
     train_op = optimizer.apply_gradients(
         zip(model.grads, model.vars),
         global_step=global_step)
