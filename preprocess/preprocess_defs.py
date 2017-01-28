@@ -2,6 +2,7 @@ import os
 import argparse
 import json
 import operator
+import nltk
 
 # sos_symbol = '<s>'
 eos_symbol = '</s>'
@@ -10,7 +11,7 @@ def_symbol = '<def>'
 
 parser = argparse.ArgumentParser()
 parser.add_argument("text_dir",
-                    help="Text directory, the text file should be tokenized and sentence separated (lines).")
+                    help="Definition directory.")
 parser.add_argument("stopword_file", help="stopword file path")
 parser.add_argument("--bow_vocab_size", help="Number of vocab in BOW features",
                     default=5000)
@@ -28,7 +29,6 @@ ofps = {}
 for s in splits:
     ofps[s] = open(os.path.join(args.text_dir,
                                 'preprocess/{}.jsonl'.format(s)), 'w')
-
 w_count = {
     # sos_symbol:0,
     eos_symbol:0,
@@ -39,11 +39,14 @@ w_low_count = w_count.copy()
 args.max_def_len = int(args.max_def_len)
 for s in splits:
     f = os.path.join(args.text_dir, '{}.tsv'.format(s))
-    with open(f) as ifp:
+    pf = os.path.join(args.text_dir, '{}.txt'.format(s))
+    with open(f) as ifp, open(pf, 'w') as pfp:
         for line in ifp:
             parts = line.lower().strip().split('\t')
-            if len(parts[3].split()) > args.max_def_len:
+            def_tokens = nltk.word_tokenize(parts[3])
+            if len(def_tokens) > args.max_def_len:
                 continue
+            parts[3] = ' '.join(def_tokens)
             data = {'meta':{'word':parts[0], 'pos':parts[1], 'src':parts[2] },
                     'key': parts[0],
                     'lines':[' '.join([parts[0], def_symbol, parts[3]])]}
@@ -58,6 +61,8 @@ for s in splits:
             ofp = ofps[s]
             json.dump(obj=data, fp=ofp)
             ofp.write('\n')
+            pfp.write('\t'.join(parts))
+            pfp.write('\n')
 for ofp in ofps:
     ofps[ofp].close()
 
