@@ -94,16 +94,18 @@ def run_joint_epoch(sess, train_lm, train_dm,
         state_dm_end = state_dm_start + 2*train_dm.opt.num_layers
         state_dm_flat = res[state_dm_start:state_dm_end]
         state_dm = [state_dm_flat[i:i+2] for i in range(0, len(state_dm_flat), 2)]
-        cost_lm += res[0]
-        cost_dm += res[1]
-        num_words_lm += np.sum(w)
-        num_words_dm += np.sum(def_w)
+        b_num_words_lm = np.sum(w)
+        b_num_words_dm = np.sum(def_w)
+        cost_lm += res[0] * b_num_words_lm
+        cost_dm += res[1] * b_num_words_dm
+        num_words_lm += b_num_words_lm
+        num_words_dm += b_num_words_dm
         if (step + 1) % opt.progress_steps == 0:
             logger.info("-- @{} LM PPL: {}, DM PPL: {}, joint wps: {}".format(
-                    step + 1, np.exp(cost_lm / (step + 1)),
-                    np.exp(cost_dm / (step + 1)),
+                    step + 1, np.exp(cost_lm / num_words_lm),
+                    np.exp(cost_dm / num_words_dm),
                     (num_words_lm + num_words_dm) / (time.time() - start_time)))
-    return np.exp(cost_lm / (step+1)), np.exp(cost_dm / (step + 1)), step
+    return np.exp(cost_lm / num_words_lm), np.exp(cost_dm / num_words_dm), step
 
 def main(opt_lm, opt_dm):
     vocab_emb_path = opt_lm.shared_emb_vocab
