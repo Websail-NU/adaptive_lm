@@ -104,7 +104,7 @@ class LM(object):
         self._rnn_output, softmax_size = self._modified_rnn_state_graph(
             opt, self._rnn_state)
         # Softmax and loss
-        loss, self._all_losses = self._softmax_loss_graph(
+        loss, self._all_losses, self._all_logits = self._softmax_loss_graph(
             opt, softmax_size, self._rnn_output, y, w)
         return loss
 
@@ -180,6 +180,7 @@ class LM(object):
         """ Create softmax and loss graph """
         softmax_w = self._softmax_w(opt, softmax_size)
         softmax_b = tf.get_variable("softmax_b", [opt.vocab_size])
+        logits = None
         # only sample when training
         if opt.num_softmax_sampled == 0 or not self.is_training:
             with tf.variable_scope("softmax_w"):
@@ -202,7 +203,7 @@ class LM(object):
         flat_w = tf.reshape(w, [-1])
         sum_loss = tf.reduce_sum(loss * flat_w)
         mean_loss = sum_loss / (tf.reduce_sum(flat_w) + 1e-12)
-        return mean_loss, loss
+        return mean_loss, loss, logits
 
     def _backward(self, opt, loss):
         """ Create gradient graph (including gradient clips).
