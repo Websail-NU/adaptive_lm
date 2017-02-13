@@ -26,8 +26,8 @@ def main(lm_opt, dm_opt):
         shortlist_vocab_path))
     short_vocab = data_utils.Vocabulary.from_vocab_file(shortlist_vocab_path)
     logger.debug('-- Shortlist vocab size: {}'.format(short_vocab.vocab_size))
-    lm_data, lm_vocab = load_datasets(lm_opt, vocab=short_vocab,
-                                      dataset=dataset)
+    lm_data, lm_vocab = load_datasets(lm_opt, dataset=dataset,
+                                      y_vocab=short_vocab)
     dm_data, dm_vocab = load_datasets(dm_opt, dataset=dataset,
                                       iterator_type=data_utils.SenLabelIterator,
                                       l_vocab=short_vocab)
@@ -40,8 +40,8 @@ def main(lm_opt, dm_opt):
     logger.info('Loading data completed')
 
     init_scale = lm_opt.init_scale
-    sess_config =tf.ConfigProto(log_device_placement=False,
-                                device_count = {'GPU': 0})
+    sess_config =tf.ConfigProto(log_device_placement=False)
+                                # device_count = {'GPU': 0})
     logger.info('Starting TF Session...')
 
     with tf.Session(config=sess_config) as sess:
@@ -104,14 +104,14 @@ def main(lm_opt, dm_opt):
                 dm_state.learning_rate))
             dm_train_ppl, _ = run_epoch(sess, dm_train, dm_data['train'],
                                         dm_opt, train_op=dm_train_op)
-            logger.info('- Validating DM:')
+            logger.info('- Validating DM...')
             dm_valid_ppl, _ = run_epoch(sess, dm_valid,
                                         dm_data['valid'], dm_opt)
             logger.info("- Traning LM with learning rate {}...".format(
                 lm_state.learning_rate))
             lm_train_ppl, _ = run_epoch(sess, lm_train, lm_data['train'],
                                         lm_opt, train_op=lm_train_op)
-            logger.info('- Validating LM:')
+            logger.info('- Validating LM...')
             lm_valid_ppl, _ = run_epoch(sess, lm_valid,
                                         lm_data['valid'], lm_opt)
             logger.info('----------------------------------')
