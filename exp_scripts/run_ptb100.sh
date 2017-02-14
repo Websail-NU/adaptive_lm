@@ -9,7 +9,7 @@ function rm_if_exist {
 
 SHARED_EMB_VOCAB="data/ptb-100/common_defs_ptb_shortlist.txt"
 MODEL_OPTIONS="--state_size 300 --emb_size 300  --num_layers 2  --keep_prob 0.5 --emb_keep_prob 0.5"
-TRAIN_OPTIONS="--sen_independent --lr_decay_wait 2 --lr_decay_factor 0.6 --min_learning_rate 1e-4 --max_grad_norm 5 --num_steps 30  --learning_rate 1e-3 --debug --optim adam"
++TRAIN_OPTIONS="--sen_independent --lr_decay_wait 2 --lr_decay_factor 0.65 --min_learning_rate .01 --max_grad_norm 5 --num_steps 30  --learning_rate 0.8 --debug --optim sgd"
 
 DROP_RATES="0 20 40 60 80 100"
 

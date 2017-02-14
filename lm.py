@@ -179,7 +179,8 @@ class LM(object):
     def _softmax_loss_graph(self, opt, softmax_size, state, y, w):
         """ Create softmax and loss graph """
         softmax_w = self._softmax_w(opt, softmax_size)
-        softmax_b = tf.get_variable("softmax_b", [opt.vocab_size])
+        _softmax_w_size = sum([v.get_shape()[0].value for v in softmax_w])
+        softmax_b = tf.get_variable("softmax_b", [_softmax_w_size])
         logits = None
         # only sample when training
         if opt.num_softmax_sampled == 0 or not self.is_training:
