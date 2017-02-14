@@ -31,7 +31,7 @@ def main(lm_opt, dm_opt):
     dm_data, dm_vocab = load_datasets(dm_opt, dataset=dataset,
                                       iterator_type=data_utils.SenLabelIterator,
                                       l_vocab=short_vocab)
-    lm_opt.vocab_size = short_vocab.vocab_size
+    lm_opt.vocab_size = lm_vocab.vocab_size
     dm_opt.vocab_size = dm_vocab.vocab_size
     lm_vocab_mask = data_utils.Vocabulary.create_vocab_mask(
         lm_vocab, short_vocab)
@@ -57,7 +57,6 @@ def main(lm_opt, dm_opt):
         with open(dm_emb_path) as ifp:
             emb_array = cPickle.load(ifp)
             dm_emb_init = tf.constant(emb_array, dtype=tf.float32)
-        # Setting embedding variables
         lm_opt.softmax_w_vars = shared_emb_vars
         dm_opt.af_ex_emb_vars = shared_emb_vars
         dm_opt.input_emb_init = dm_emb_init

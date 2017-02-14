@@ -226,11 +226,13 @@ class DataIterator(object):
         self._data = np.array(data, np.int32)
         if len(data_x) == 0:
             self._data_x = self._data
+            self._x_vocab = self._vocab
         else:
             data_x.insert(0, self._x_vocab.eos_id)
             self._data_x = np.array(data_x, np.int32)
         if len(data_y) == 0:
             self._data_y = self._data
+            self._y_vocab = self._vocab
         else:
             data_y.insert(0, self._y_vocab.eos_id)
             self._data_y = np.array(data_y, np.int32)
