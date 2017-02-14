@@ -55,8 +55,24 @@ def train_op(model, opt):
                                   initializer=tf.zeros_initializer,
                                   trainable=False)
     optimizer = get_optimizer(lr, opt.optim)
+    loss = model.loss * opt.batch_size
+    g_v_pairs = optimizer.compute_gradients(loss)
+    grads, tvars = [], []
+    for g,v in g_v_pairs:
+        if g is None:
+            continue
+        tvars.append(v)
+        if "emb" in v.name and "softmax" not in g.name:
+            assert isinstance(g, tf.IndexedSlices)
+            grads.append(tf.IndexedSlices(g.values * opt.batch_size,
+                                          g.indices, g.dense_shape))
+        else:
+            grads.append(g)
+    clipped_grads, _norm = tf.clip_by_global_norm(
+        grads, opt.max_grad_norm)
+    g_v_pairs = zip(clipped_grads, tvars)
     train_op = optimizer.apply_gradients(
-        zip(model.grads, model.vars),
+        g_v_pairs,
         global_step=global_step)
     return train_op, lr
 
@@ -87,8 +103,8 @@ class LM(object):
             The method creates loss and grads for running and training.
         """
         self.loss = self._forward(opt, self.x, self.y, self.w)
-        if self.is_training and self.create_grads:
-            self.grads, self.vars = self._backward(opt, self.loss)
+        # if self.is_training and self.create_grads:
+        #     self.grads, self.vars = self._backward(opt, self.loss)
 
     def _forward(self, opt, x, y, w):
         """ Create forward graph. """
@@ -206,11 +222,11 @@ class LM(object):
         mean_loss = sum_loss / (tf.reduce_sum(flat_w) + 1e-12)
         return mean_loss, loss, logits
 
-    def _backward(self, opt, loss):
-        """ Create gradient graph (including gradient clips).
-            Return clipped gradients and trainable variables
-        """
-        loss = loss * opt.num_steps
+    # def _backward(self, opt, loss):
+    #     """ Create gradient graph (including gradient clips).
+    #         Return clipped gradients and trainable variables
+    #     """
+    #     loss = loss * opt.num_steps
         # emb_vars, rnn_vars, softmax_vars, other_vars = self._get_variables(opt)
         # all_vars = emb_vars + rnn_vars + softmax_vars + other_vars
         # grads = tf.gradients(loss, all_vars)
@@ -233,19 +249,7 @@ class LM(object):
         #     all_grads, opt.max_grad_norm)
         # assert len(clipped_grads) == len(orig_grads)
         # return clipped_grads, all_vars
-        g_v_pairs = optimizer.compute_gradients(loss)
-        grads, tvars = [], []
-        for g,v in g_v_pairs:
-            tvars.append(v)
-            if "emb" in v.name:
-                assert isinstance(g, tf.IndexedSlices)
-                grads.append(tf.IndexedSlices(g.values * opt.batch_size,
-                                              g.indices, g.dense_shape))
-            else:
-                grads.append(g)
-        clipped_grads, _norm = tf.clip_by_global_norm(
-            grads, opt_lm.max_grad_norm)
-        return clipped_grads, tvars
+
 
     def _get_variables(self, opt):
         emb_vars = None
