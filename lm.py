@@ -51,9 +51,7 @@ def get_optimizer(lr_var, optim):
 
 def train_op(model, opt):
     lr = tf.Variable(opt.learning_rate, trainable=False)
-    global_step = tf.get_variable("global_step", [], tf.float32,
-                                  initializer=tf.zeros_initializer,
-                                  trainable=False)
+    global_step = tf.contrib.framework.get_or_create_global_step()
     optimizer = get_optimizer(lr, opt.optim)
     loss = model.loss * opt.batch_size
     g_v_pairs = optimizer.compute_gradients(loss)
@@ -148,7 +146,7 @@ class LM(object):
             x = tf.nn.dropout(x, opt.emb_keep_prob)
         # steps * [bs, emb_size]
         inputs = [tf.squeeze(_x, [1])
-                  for _x in tf.split(1, opt.num_steps, x)]
+                  for _x in tf.split(x, opt.num_steps, 1)]
         # opt.rnn_input_size = opt.emb_size
         return inputs
 
@@ -156,21 +154,21 @@ class LM(object):
         """ Create RNN graph """
         with tf.variable_scope("rnn") as vs:
             # TODO: Support other types of cells
-            cell = tf.nn.rnn_cell.BasicLSTMCell(opt.state_size)
+            cell = tf.contrib.rnn.BasicLSTMCell(opt.state_size)
             if self.is_training and opt.keep_prob < 1.0:
-                cell = tf.nn.rnn_cell.DropoutWrapper(
+                cell = tf.contrib.rnn.DropoutWrapper(
                     cell, output_keep_prob=opt.keep_prob)
-            cell_stack = tf.nn.rnn_cell.MultiRNNCell(
+            cell_stack = tf.contrib.rnn.MultiRNNCell(
                 [cell] * opt.num_layers, state_is_tuple=True)
             initial_state = cell_stack.zero_state(
                 opt.batch_size, tf.float32)
             seq_len = None
             if opt.varied_len:
                 seq_len = self.seq_len
-            outputs, state = tf.nn.rnn(
+            outputs, state = tf.contrib.rnn.static_rnn(
                 cell_stack, inputs, initial_state=initial_state,
                 sequence_length=seq_len)
-        outputs = tf.reshape(tf.concat(1, outputs), [-1, opt.state_size])
+        outputs = tf.reshape(tf.concat(outputs, 1), [-1, opt.state_size])
         return outputs, initial_state, state
 
     def _modified_rnn_state_graph(self, opt, rnn_state):
@@ -202,7 +200,7 @@ class LM(object):
         if opt.num_softmax_sampled == 0 or not self.is_training:
             with tf.variable_scope("softmax_w"):
                 full_softmax_w = tf.reshape(
-                    tf.concat(1, softmax_w), [-1, softmax_size])
+                    tf.concat(softmax_w, 1), [-1, softmax_size])
                 # full_softmax_w = full_softmax_w[:opt.vocab_size, :]
             logits = tf.matmul(
                 state, full_softmax_w, transpose_b=True) + softmax_b
@@ -210,7 +208,7 @@ class LM(object):
                 logits = logits + self._logit_mask(opt)
             targets = tf.reshape(y, [-1])
             loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                logits, targets)
+                logits=logits, labels=targets)
         else:
             targets = tf.reshape(y, [-1, 1])
             loss = tf.nn.sampled_softmax_loss(
@@ -283,10 +281,10 @@ class LMwAF(LM):
         self._af = self._extract_features(opt, self.l)
         if opt.af_mode == 'concat_input':
             with tf.variable_scope("afeatures"):
-                x = tf.concat(2, [self._af, x])
+                x = tf.concat([self._af, x], 2)
         # steps * [bs, emb_size + af_size]
         inputs = [tf.squeeze(_x, [1])
-                  for _x in tf.split(1, opt.num_steps, x)]
+                  for _x in tf.split(x, opt.num_steps, 1)]
         return inputs
 
     def _modified_rnn_state_graph(self, opt, rnn_state):
@@ -294,7 +292,7 @@ class LMwAF(LM):
             return super(LMwAF, self)._modified_rnn_state_graph(opt, rnn_state)
         with tf.variable_scope("afeatures"):
             l = tf.reshape(self._af, [-1, self._af_size])
-            outputs = tf.concat(1, [l, rnn_state])
+            outputs = tf.concat([l, rnn_state], 1)
             full_size = self._af_size + opt.state_size
             if opt.af_mode == 'concat_state':
                 proj_w = tf.get_variable("af_h_proj_w",
@@ -309,13 +307,13 @@ class LMwAF(LM):
                              name="af_z_gate")
                 r = tf.slice(zr, [0, opt.state_size], [-1, -1],
                              name="af_r_gate")
-                l = tf.mul(l, r)
-                outputs = tf.concat(1, [l, rnn_state])
+                l = tf.multiply(l, r)
+                outputs = tf.concat([l, rnn_state], 1)
                 h_w = tf.get_variable("af_h_w",
                                       [full_size, opt.state_size])
                 h_b = tf.get_variable("af_h_b", [opt.state_size])
                 h = tf.tanh(tf.matmul(outputs, h_w) + h_b)
-                outputs = tf.mul((1-z), rnn_state) + tf.mul(z, h)
+                outputs = tf.multiply((1-z), rnn_state) + tf.multiply(z, h)
         return outputs, opt.state_size
 
     def _extract_features(self, opt, l):
@@ -347,7 +345,7 @@ class LMwAF(LM):
                         initializer=initializer, dtype=tf.float32, trainable=False)
                     af_emb_vars.append(af_fixed_emb)
                 if len(af_emb_vars) > 1:
-                    self.af_emb_var = tf.concat(0, af_emb_vars)
+                    self.af_emb_var = tf.concat(af_emb_vars, 0)
                 else:
                     self.af_emb_var = af_emb_vars
                 l = tf.nn.embedding_lookup(self.af_emb_var, l)
