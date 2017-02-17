@@ -52,8 +52,6 @@ def get_optimizer(lr_var, optim):
 def train_op(model, opt):
     lr = tf.Variable(opt.learning_rate, trainable=False)
     global_step = tf.contrib.framework.get_or_create_global_step()
-    if initializer is None:
-        initializer = tf.zeros_initializer()
     optimizer = get_optimizer(lr, opt.optim)
     loss = model.loss * opt.batch_size
     g_v_pairs = optimizer.compute_gradients(loss)
