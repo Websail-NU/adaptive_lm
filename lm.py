@@ -51,9 +51,7 @@ def get_optimizer(lr_var, optim):
 
 def train_op(model, opt):
     lr = tf.Variable(opt.learning_rate, trainable=False)
-    global_step = tf.get_variable("global_step", [], tf.float32,
-                                  initializer=None,
-                                  trainable=False)
+    global_step = tf.contrib.framework.get_or_create_global_step()
     if initializer is None:
         initializer = tf.zeros_initializer()
     optimizer = get_optimizer(lr, opt.optim)
@@ -169,7 +167,7 @@ class LM(object):
             seq_len = None
             if opt.varied_len:
                 seq_len = self.seq_len
-            outputs, state = tf.nn.rnn(
+            outputs, state = tf.contrib.rnn.static_rnn(
                 cell_stack, inputs, initial_state=initial_state,
                 sequence_length=seq_len)
         outputs = tf.reshape(tf.concat(outputs, 1), [-1, opt.state_size])
