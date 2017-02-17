@@ -127,7 +127,7 @@ def main(lm_opt, dm_opt):
             logger.info('- Epoch time: {}s'.format(time.time() - epoch_time))
             if done_training:
                 break
-        logger.info('Done training at epoch {}'.format(state.epoch + 1))
+        logger.info('Done training at epoch {}'.format(lm_state.epoch + 1))
 
 if __name__ == "__main__":
     global_time = time.time()
