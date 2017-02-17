@@ -25,8 +25,10 @@ def get_joint_train_op(train_lm, train_dm, opt_lm, opt_dm):
         lr = tf.Variable(opt_lm.learning_rate, trainable=False,
                          name="learning_rate")
         global_step = tf.get_variable("global_step", [], tf.float32,
-                                      initializer=tf.zeros_initializer,
+                                      initializer=None,
                                       trainable=False)
+        if initializer is None:
+            initializer = tf.zeros_initializer()
         optimizer = lm.get_optimizer(lr, opt_lm.optim)
         g_v_pairs = optimizer.compute_gradients(joint_loss)
         grads, tvars = [], []

@@ -16,12 +16,12 @@ import time
 import os
 import json
 import random
-random.seed(1234)
+# random.seed(1234)
 
 import numpy as np
-np.random.seed(1234)
+# np.random.seed(1234)
 import tensorflow as tf
-tf.set_random_seed(1234)
+# tf.set_random_seed(1234)
 
 import lm
 import common_utils
@@ -96,8 +96,6 @@ def main(opt):
         state, _ = resume_if_possible(opt, sess, saver, state)
         logger.info('Start training loop:')
         logger.debug('\n' + common_utils.SUN_BRO())
-        # writer = tf.train.SummaryWriter("tf.log", sess.graph)
-        # writer.close()
         for epoch in range(state.epoch, opt.max_epochs):
             epoch_time = time.time()
             state.epoch = epoch
