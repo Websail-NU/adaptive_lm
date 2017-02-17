@@ -158,11 +158,11 @@ class LM(object):
         """ Create RNN graph """
         with tf.variable_scope("rnn") as vs:
             # TODO: Support other types of cells
-            cell = tf.nn.rnn_cell.BasicLSTMCell(opt.state_size)
+            cell = tf.contrib.rnn.BasicLSTMCell(opt.state_size)
             if self.is_training and opt.keep_prob < 1.0:
-                cell = tf.nn.rnn_cell.DropoutWrapper(
+                cell = tf.contrib.rnn.DropoutWrapper(
                     cell, output_keep_prob=opt.keep_prob)
-            cell_stack = tf.nn.rnn_cell.MultiRNNCell(
+            cell_stack = tf.contrib.rnn.MultiRNNCell(
                 [cell] * opt.num_layers, state_is_tuple=True)
             initial_state = cell_stack.zero_state(
                 opt.batch_size, tf.float32)
