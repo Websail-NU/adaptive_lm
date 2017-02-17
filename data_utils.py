@@ -159,12 +159,15 @@ class DataIterator(object):
     def __init__(self, vocab=None, file_path=None, **kwargs):
         self._kwargs = kwargs
         self._x_vocab, self._y_vocab = None, None
+        self._x_padding_id, self._y_padding_id = None, None
         self._add_sos, self._add_eos = False, True
         self._shuffle_data = True
         if 'x_vocab' in self._kwargs:
             self._x_vocab = self._kwargs['x_vocab']
+            self._x_padding_id = self._x_vocab.eos_id
         if 'y_vocab' in self._kwargs:
             self._y_vocab = self._kwargs['y_vocab']
+            self._y_padding_id = self._y_vocab.eos_id
         if 'sos' in self._kwargs:
             self._add_sos = self._kwargs['sos']
         if 'eos' in self._kwargs:
@@ -174,6 +177,10 @@ class DataIterator(object):
         if vocab is not None:
             self._vocab = vocab
             self._padding_id = vocab.eos_id
+            if self._x_padding_id is None:
+                self._x_padding_id = vocab.eos_id
+            if self._y_padding_id is None:
+                self._y_padding_id = vocab.eos_id
             self._parse_file(file_path)
 
     def _parse_sentence(self, sentence, vocab=None):
@@ -219,13 +226,15 @@ class DataIterator(object):
         self._data = np.array(data, np.int32)
         if len(data_x) == 0:
             self._data_x = self._data
+            self._x_vocab = self._vocab
         else:
             data_x.insert(0, self._x_vocab.eos_id)
             self._data_x = np.array(data_x, np.int32)
         if len(data_y) == 0:
             self._data_y = self._data
+            self._y_vocab = self._vocab
         else:
-            data_x.insert(0, self._y_vocab.eos_id)
+            data_y.insert(0, self._y_vocab.eos_id)
             self._data_y = np.array(data_y, np.int32)
 
         self._lidx = label_idx
@@ -267,7 +276,7 @@ class DataIterator(object):
         if all(self._read_tokens >= self._distances):
             return None, None, None, None, None
         # reset old data
-        self.x[:], self.y[:] = self._padding_id, self._padding_id
+        self.x[:], self.y[:] = self._x_padding_id, self._y_padding_id
         self.w[:], self.seq_len[:] = 0, 0
         for i in range(len(self.l)):
             for j in range(len(self.l[0])):
