@@ -139,30 +139,6 @@ def run_post_epoch(new_train_ppl, new_valid_ppl,
     save_model_and_state(sess, saver, state, opt.output_dir, latest_prefix)
     return done_training
 
-def transfer_emb(sess, s_scope, s_name, t_scope, t_name, shortlist, index_map):
-    logger = logging.getLogger("exp")
-    s_emb_vars = lm.find_variables(s_scope, s_name)
-    t_emb_vars = lm.find_variables(t_scope, t_name)
-    s_embs = sess.run(s_emb_vars)
-    t_embs = sess.run(t_emb_vars)
-    logger.info('- Transfering parameters')
-    logger.debug('-- From {} ...'.format(
-        ', '.join([v.name for v in s_emb_vars])))
-    logger.debug('-- To {} ...'.format(
-        ', '.join([v.name for v in t_emb_vars])))
-    c = 0
-    for k in shortlist:
-        t_k = index_map[k]
-        t_i = 0
-        if t_k >= len(t_embs[0]):
-            t_i = 1
-            t_k = t_k - len(t_embs[0])
-        t_embs[t_i][t_k] = s_embs[0][k]
-        c = c+1
-    logger.debug('-- Completed, total rows: {}'.format(c))
-    for i in range(len(t_embs)):
-        sess.run(tf.assign(t_emb_vars[i], t_embs[i]))
-
 def run_epoch(sess, m, data_iter, opt,
               train_op=tf.no_op(), token_loss=None):
     """ train the model on the given data. """
