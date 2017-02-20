@@ -27,7 +27,7 @@ def main(lm_opt):
     init_scale = lm_opt.init_scale
     sess_config = common_utils.get_tf_sess_config(lm_opt)
     logger.info('Starting TF Session...')
-    with tf.Session(sess_config) as sess:
+    with tf.Session(config=sess_config) as sess:
         logger.info('Creating model...')
         init_scale = lm_opt.init_scale
         logger.debug(
