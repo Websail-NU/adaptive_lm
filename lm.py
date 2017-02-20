@@ -9,32 +9,6 @@ Todo:
 # \[T]/ PRAISE THE SUN!
 #  |_|
 #  | |
-
-def find_variables(top_scope, key):
-    return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                             "{}/.*{}.*".format(top_scope, key))
-
-def find_trainable_variables(top_scope, key):
-    return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                             "{}/.*{}.*".format(top_scope, key))
-
-def sharded_variable(name, shape, num_shards, trainable=True,
-                     dtype=tf.float32, initializer=None):
-    # The final size of the sharded variable may be larger than requested.
-    # This should be fine for embeddings.
-    shard_size = int((shape[0] + num_shards - 1) / num_shards)
-    if initializer is None:
-        initializer = tf.uniform_unit_scaling_initializer(dtype=dtype)
-    if isinstance(initializer, tf.Tensor):
-        return [tf.get_variable(name+"_0",
-                                initializer=initializer,
-                                dtype=dtype, trainable=trainable)]
-    return [tf.get_variable(name + "_%d" % i,
-                            [shard_size, shape[1]],
-                            initializer=initializer,
-                            dtype=dtype)
-            for i in range(num_shards)]
-
 def get_optimizer(lr_var, optim):
     optimizer = None
     if optim == "sgd":
@@ -55,15 +29,8 @@ def train_op(model, opt):
     g_v_pairs = optimizer.compute_gradients(loss)
     grads, tvars = [], []
     for g,v in g_v_pairs:
-        if g is None:
-            continue
         tvars.append(v)
-        if "emb" in v.name and "softmax" not in g.name:
-            assert isinstance(g, tf.IndexedSlices)
-            grads.append(tf.IndexedSlices(g.values * opt.batch_size,
-                                          g.indices, g.dense_shape))
-        else:
-            grads.append(g)
+        grads.append(g)
     clipped_grads, _norm = tf.clip_by_global_norm(
         grads, opt.max_grad_norm)
     g_v_pairs = zip(clipped_grads, tvars)
@@ -118,10 +85,7 @@ class LM(object):
         return loss
 
     def _input_emb(self, opt):
-        emb_vars = sharded_variable(
-            "emb", [opt.vocab_size, opt.emb_size], opt.num_shards,
-            trainable=opt.input_emb_trainable)
-        return emb_vars
+        return tf.get_variable("emb", [opt.vocab_size, opt.emb_size])
 
     def _input_graph(self, opt, emb_vars, x):
         """ Create input graph before the RNN """
@@ -159,33 +123,15 @@ class LM(object):
     def _modified_rnn_state_graph(self, opt, rnn_state):
         return rnn_state, opt.state_size
 
-    def _softmax_w(self, opt, softmax_size):
-        softmax_w = sharded_variable(
-            "softmax_w", [opt.vocab_size, softmax_size], opt.num_shards)
-        return softmax_w
-
     def _softmax_loss_graph(self, opt, softmax_size, state, y, w):
         """ Create softmax and loss graph """
-        softmax_w = self._softmax_w(opt, softmax_size)
-        _softmax_w_size = sum([v.get_shape()[0].value for v in softmax_w])
-        softmax_b = tf.get_variable("softmax_b", [_softmax_w_size])
-        logits = None
-        # only sample when training
-        if opt.num_softmax_sampled == 0 or not self.is_training:
-            with tf.variable_scope("softmax_w"):
-                full_softmax_w = tf.reshape(
-                    tf.concat(softmax_w, 1), [-1, softmax_size])
-            logits = tf.matmul(
-                state, full_softmax_w, transpose_b=True) + softmax_b
-            targets = tf.reshape(y, [-1])
-            loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                logits=logits, labels=targets)
-        else:
-            targets = tf.reshape(y, [-1, 1])
-            loss = tf.nn.sampled_softmax_loss(
-                softmax_w, softmax_b, tf.to_float(state),
-                targets, opt.num_softmax_sampled, opt.vocab_size)
-        # mean_loss = tf.reduce_mean(loss * tf.reshape(w, [-1]))
+        softmax_w = tf.get_variable("softmax_w", [opt.vocab_size, softmax_size])
+        softmax_b = tf.get_variable("softmax_b", [opt.vocab_size])
+        logits = tf.matmul(
+            state, softmax_w, transpose_b=True) + softmax_b
+        targets = tf.reshape(y, [-1])
+        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            logits=logits, labels=targets)
         flat_w = tf.reshape(w, [-1])
         sum_loss = tf.reduce_sum(loss * flat_w)
         mean_loss = sum_loss / (tf.reduce_sum(flat_w) + 1e-12)

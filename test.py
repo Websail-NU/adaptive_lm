@@ -25,10 +25,9 @@ def main(lm_opt):
     lm_opt.vocab_size = lm_vocab.vocab_size
     logger.info('Loading data completed')
     init_scale = lm_opt.init_scale
-    sess_config =tf.ConfigProto(log_device_placement=False)
-                                # device_count = {'GPU': 0})
+    sess_config = common_utils.get_tf_sess_config(lm_opt)
     logger.info('Starting TF Session...')
-    with tf.Session() as sess:
+    with tf.Session(sess_config) as sess:
         logger.info('Creating model...')
         init_scale = lm_opt.init_scale
         logger.debug(
