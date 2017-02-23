@@ -60,13 +60,12 @@ def train_op(model, opt):
         if g is None:
             continue
         tvars.append(v)
-        grads.append(g)
-        # if "emb" in v.name and "softmax" not in g.name:
-        #     assert isinstance(g, tf.IndexedSlices)
-        #     grads.append(tf.IndexedSlices(g.values * opt.batch_size,
-        #                                   g.indices, g.dense_shape))
-        # else:
-        #     grads.append(g)
+        if "embedding_lookup" in g.name:
+            assert isinstance(g, tf.IndexedSlices)
+            grads.append(tf.IndexedSlices(g.values * opt.batch_size,
+                                          g.indices, g.dense_shape))
+        else:
+            grads.append(g)
     clipped_grads, _norm = tf.clip_by_global_norm(
         grads, opt.max_grad_norm)
     g_v_pairs = zip(clipped_grads, tvars)

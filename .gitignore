@@ -8,3 +8,4 @@ data/wikitext-2
 .ipynb_checkpoints/
 *.pyc
 .remote-sync.json
+experiments/

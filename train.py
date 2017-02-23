@@ -35,7 +35,7 @@ def main(opt):
     opt.vocab_size = vocab.vocab_size
     init_scale = opt.init_scale
     logger.debug('Staring session...')
-    sess_config = common_utils.get_tf_sess_config(lm_opt)
+    sess_config = common_utils.get_tf_sess_config(opt)
     with tf.Session(config=sess_config) as sess:
         logger.debug(
             '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
