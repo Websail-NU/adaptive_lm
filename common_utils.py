@@ -105,8 +105,19 @@ def get_initial_training_state():
         imp_wait = 0
     )
 
+def get_tf_sess_config(opt):
+    import tensorflow as tf
+    sess_config = tf.ConfigProto(log_device_placement=False,
+                                 device_count = {'GPU': 0})
+    if opt.gpu:
+        sess_config = tf.ConfigProto(log_device_placement=False)
+    return sess_config
+
 def get_common_argparse():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--gpu', dest='gpu',
+                        action='store_true')
+    parser.set_defaults(gpu=False)
     # Data and vocabulary file
     parser.add_argument('--data_dir', type=str,
                         default='data/ptb/preprocess',

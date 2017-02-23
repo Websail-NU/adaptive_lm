@@ -60,12 +60,13 @@ def train_op(model, opt):
         if g is None:
             continue
         tvars.append(v)
-        if "emb" in v.name and "softmax" not in g.name:
-            assert isinstance(g, tf.IndexedSlices)
-            grads.append(tf.IndexedSlices(g.values * opt.batch_size,
-                                          g.indices, g.dense_shape))
-        else:
-            grads.append(g)
+        grads.append(g)
+        # if "emb" in v.name and "softmax" not in g.name:
+        #     assert isinstance(g, tf.IndexedSlices)
+        #     grads.append(tf.IndexedSlices(g.values * opt.batch_size,
+        #                                   g.indices, g.dense_shape))
+        # else:
+        #     grads.append(g)
     clipped_grads, _norm = tf.clip_by_global_norm(
         grads, opt.max_grad_norm)
     g_v_pairs = zip(clipped_grads, tvars)
@@ -214,55 +215,10 @@ class LM(object):
             loss = tf.nn.sampled_softmax_loss(
                 softmax_w, softmax_b, tf.to_float(state),
                 targets, opt.num_softmax_sampled, opt.vocab_size)
-        # mean_loss = tf.reduce_mean(loss * tf.reshape(w, [-1]))
         flat_w = tf.reshape(w, [-1])
         sum_loss = tf.reduce_sum(loss * flat_w)
         mean_loss = sum_loss / (tf.reduce_sum(flat_w) + 1e-12)
         return mean_loss, loss, logits
-
-    # def _backward(self, opt, loss):
-    #     """ Create gradient graph (including gradient clips).
-    #         Return clipped gradients and trainable variables
-    #     """
-    #     loss = loss * opt.num_steps
-        # emb_vars, rnn_vars, softmax_vars, other_vars = self._get_variables(opt)
-        # all_vars = emb_vars + rnn_vars + softmax_vars + other_vars
-        # grads = tf.gradients(loss, all_vars)
-        # orig_grads = grads[:]
-        # # getting embedding gradients from shards
-        # emb_grads = grads[:len(emb_vars)]
-        # grads = grads[len(emb_vars):]
-        # for i in range(len(emb_grads)):
-        #     assert isinstance(emb_grads[i], tf.IndexedSlices)
-        #     emb_grads[i] = tf.IndexedSlices(
-        #         emb_grads[i].values * opt.batch_size, emb_grads[i].indices,
-        #         emb_grads[i].dense_shape)
-        # # getting rnn gradients for cliping
-        # rnn_grads = grads[:len(rnn_vars)]
-        # # rnn_grads, rnn_norm = tf.clip_by_global_norm(rnn_grads, opt.max_grad_norm)
-        # # the rest of the gradients
-        # rest_grads = grads[len(rnn_vars):]
-        # all_grads = emb_grads + rnn_grads + rest_grads
-        # clipped_grads, _norm = tf.clip_by_global_norm(
-        #     all_grads, opt.max_grad_norm)
-        # assert len(clipped_grads) == len(orig_grads)
-        # return clipped_grads, all_vars
-
-
-    def _get_variables(self, opt):
-        emb_vars = None
-        if hasattr(opt, 'input_emb_vars'):
-            emb_vars = opt.input_emb_vars
-        else:
-            emb_vars = find_trainable_variables(self._top_scope, "emb")
-        rnn_vars = find_trainable_variables(self._top_scope, "rnn")
-        softmax_vars = find_trainable_variables(self._top_scope, "softmax")
-        other_vars = self._get_additional_variables()
-        return emb_vars, rnn_vars, softmax_vars, other_vars
-
-    def _get_additional_variables(self):
-        """ Placeholder method """
-        return []
 
 class LMwAF(LM):
 
