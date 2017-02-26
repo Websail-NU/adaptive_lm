@@ -10,6 +10,7 @@ import argparse
 import collections
 import json
 import os
+import sys
 
 class LazyBunch(neobunch.Bunch):
     """ Just like Bunch,
@@ -99,9 +100,11 @@ def get_tf_sess_config(opt):
     return sess_config
 
 def get_common_argparse():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--gpu', dest='gpu',
                         action='store_true')
+    parser.add_argument('--no-gpu', dest='gpu',
+                        action='store_false')
     parser.set_defaults(gpu=False)
     # Data and vocabulary file
     parser.add_argument('--data_dir', type=str,
@@ -137,6 +140,9 @@ def get_common_argparse():
     parser.add_argument('--training', dest='training',
                         action='store_true',
                         help='Set to train model.')
+    parser.add_argument('--no-training', dest='training',
+                        action='store_false',
+                        help='Set to only run model.')
     parser.set_defaults(training=False)
     parser.add_argument('--optim', type=str, default="sgd",
                         help='Optimization algorithm: sgd or adam')
@@ -154,12 +160,18 @@ def get_common_argparse():
                               'the RNN steps past the sequence length. '
                               'You should avoid setting this to true '
                               'if input is always in full sequence.'))
+    parser.add_argument('--no-varied_len', dest='varied_len',
+                        action='store_false',
+                        help='use static RNN graph')
     parser.set_defaults(varied_len=False)
     parser.add_argument('--sen_independent', dest='sen_independent',
                         action='store_true',
                         help=('Training RNN with padded batch, '
                               'and reset state every time a batch '
                               'comes from new sentences.'))
+    parser.add_argument('--no-sen_independent', dest='sen_independent',
+                        action='store_false',
+                        help='Maintain RNN state')
     parser.set_defaults(sen_independent=False)
     # Parameters for gradient descent.
     parser.add_argument('--max_grad_norm', type=float, default=10.,
@@ -185,13 +197,15 @@ def get_common_argparse():
                               ' intermediate results and models.'))
     parser.add_argument('--log_file', type=str, default='experiment.log',
                         help='log file in experiment_dir')
-    parser.add_argument('--load_config_filepaht', type=str, default=None,
+    parser.add_argument('--load_config_filepath', type=str, default=None,
                         help=('Configuration absolute filepath template.'
                               'Settings will overrided by current arguments.'))
-    parser.add_argument('--save_config_file', type=str, default='config.json',
+    parser.add_argument('--save_config_file', type=str, default=None,
                         help='Configuration file to save in experiment_dir.')
     parser.add_argument('--debug', dest='debug', action='store_true',
                         help='display debug information')
+    parser.add_argument('--no-debug', dest='debug', action='store_false',
+                        help='no display debug information')
     parser.set_defaults(debug=False)
     parser.add_argument('--progress_steps', type=int,
                         default=1000,
@@ -200,10 +214,19 @@ def get_common_argparse():
 
 def update_opt(opt, parser):
     args = parser.parse_args()
-    if args.load_config_filepaht is not None:
-        with open(args.load_config_filepaht) as ifp:
+    new_opt = LazyBunch.fromNamespace(args)
+    if args.load_config_filepath is not None:
+        with open(args.load_config_filepath) as ifp:
             opt.update(LazyBunch.fromDict(json.load(ifp)))
-    opt.update(LazyBunch.fromNamespace(args))
+        for arg in sys.argv:
+            if arg.startswith('--') and len(arg) > 2:
+                arg = arg[2:]
+                if arg.startswith('no-'):
+                    opt[arg[3:]] = new_opt[arg[3:]]
+                else:
+                    opt[arg] = new_opt[arg]
+    else:
+        opt.update(new_opt)
     return opt
 
 def save_config_file(opt):
