@@ -13,6 +13,7 @@ import json
 import cPickle
 import random
 from bisect import bisect_right
+from common import LazyBunch
 
 ######################################################
 # Vocabulary
@@ -274,7 +275,7 @@ class DataIterator(object):
 
     def next_batch(self):
         if all(self._read_tokens >= self._distances):
-            return None, None, None, None, None
+            return None
         # reset old data
         self.x[:], self.y[:] = self._x_padding_id, self._y_padding_id
         self.w[:], self.seq_len[:] = 0, 0
@@ -293,15 +294,19 @@ class DataIterator(object):
                 self.seq_len[i_batch] += 1
                 self._pointers[i_batch] += 1
                 self._read_tokens[i_batch] += 1
-        return self.x, self.y, self.w, self.l, self.seq_len
+        return self.format_batch()
+
+    def format_batch(self):
+        return LazyBunch(inputs=self.x, targets=self.y, weights=self.w,
+                         lengths=self.seq_len, total=self.w.sum())
 
     def iterate_epoch(self, batch_size, num_steps=-1):
         self.init_batch(batch_size, num_steps)
         while True:
-            x, y, w, l, seq_len = self.next_batch()
-            if x is None:
+            batch = self.next_batch()
+            if batch is None:
                 break
-            yield x, y, w, l, seq_len
+            yield batch
 
 ######################################################
 # Setnence Iterator
@@ -363,7 +368,7 @@ class SentenceIterator(DataIterator):
             self._read_sentences[:] += 1
             self._read_tokens[:] = 0
             if all(self._read_sentences >= self._distances):
-                return None, None, None, None, None
+                return None
         elif self._read_tokens.sum() == 0:
             self._new_sentence_set = True
         else:
@@ -451,6 +456,29 @@ class SenLabelIterator(SentenceIterator):
 ######################################################
 # Module Functions
 ######################################################
+
+def load_datasets(opt, iterator_type=None, vocab=None,
+                  dataset=['train', 'valid', 'test'], **kwargs):
+    import logging
+    logger = logging.getLogger("exp")
+    vocab_path = os.path.join(opt.data_dir, opt.vocab_file)
+    logger.debug('- Loading vocab from {}'.format(vocab_path))
+    out_vocab = Vocabulary.from_vocab_file(vocab_path)
+    logger.debug('-- Vocab size: {}'.format(out_vocab.vocab_size))
+    if vocab is None:
+        vocab = out_vocab
+    if iterator_type is None:
+        iterator_type = DataIterator
+        if opt.sen_independent:
+            iterator_type = SentenceIterator
+    data = {}
+    for d in dataset:
+        data_key = '{}_file'.format(d)
+        data_path = os.path.join(opt.data_dir, opt[data_key])
+        logger.debug('- Loading {} data from {}'.format(d, data_path))
+        data[d] = iterator_type(vocab, data_path, **kwargs)
+        logger.debug('-- Data size: {}'.format(len(data[d]._data)))
+    return data, out_vocab
 
 def serialize_iterator(data_filepath, vocab_filepath, out_filepath):
     vocab = Vocabulary.from_vocab_file(vocab_filepath)

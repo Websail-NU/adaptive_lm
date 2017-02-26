@@ -4,62 +4,47 @@ Todo:
     - Colorize log http://plumberjack.blogspot.com/2010/12/colorizing-logging-output-in-terminals.html
 
 """
-
+import neobunch
 import logging
 import argparse
 import collections
+import json
+import os
 
-class Bunch(object):
-    def __init__(self, **kwds):
-        self.__dict__.update(kwds)
+class LazyBunch(neobunch.Bunch):
+    """ Just like Bunch,
+        but return None if a requested attribute is not defined.
+    """
+    def __getattr__(self, k):
+        try:
+            return super(LazyBunch, self).__getattr__(k)
+        except AttributeError:
+            return None
 
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
-
-    def update_from_dict(self, d):
-        # print(unicode2string(d))
-        self.__dict__.update(d)
-
-    def update_from_ns(self, ns):
-        """Works with argparse"""
-        self.update_from_dict(vars(ns))
-
-    def is_set(self, attr):
-        return attr in self.__dict__
-
-    def __str__(self):
-        return str(self.__dict__)
-
-    def __repr__(self):
-        keys = self.__dict__.keys()
+    def toPretty(self):
+        keys = self.keys()
         keys = sorted(keys)
         o = []
         for k in keys:
-            o.append("- {}:\t{}".format(k, self.__dict__[k]))
+            o.append("{}:\t{}".format(k, self[k]))
         return '\n'.join(o)
 
+    def toPrettyJSON(self, indent=2, sort_keys=True):
+        return json.dumps(self.toDict(), indent=indent, sort_keys=sort_keys)
+
     @staticmethod
-    def default_model_options():
-        opt = Bunch()
-        opt.__dict__.update(
-            batch_size=32,
-            num_steps=10,
-            num_shards=1,
-            num_layers=1,
-            varied_len=False,
-            learning_rate=0.5,
-            max_grad_norm=10.0,
-            emb_keep_prob=0.9,
-            keep_prob=0.75,
-            vocab_size=10000,
-            emb_size=100,
-            state_size=100,
-            num_softmax_sampled=0,
-            run_profiler=False,
-            init_scale=0.1,
-            input_emb_trainable=True
-        )
-        return opt
+    def fromNeoBunch(nb):
+        lb = LazyBunch(nb)
+        return lb
+
+    @staticmethod
+    def fromDict(d):
+        return LazyBunch.fromNeoBunch(
+            super(LazyBunch, LazyBunch).fromDict(d))
+
+    @staticmethod
+    def fromNamespace(ns):
+        return LazyBunch.fromDict(vars(ns))
 
 def unicode2string(data):
     if isinstance(data, basestring):
@@ -94,7 +79,7 @@ def SUN_BRO():
     return '\[T]/ PRAISE THE SUN!\n |_|\n | |'
 
 def get_initial_training_state():
-    return Bunch(
+    return LazyBunch(
         epoch = 0,
         val_ppl = float('inf'),
         best_val_ppl = float('inf'),
@@ -149,6 +134,10 @@ def get_common_argparse():
     #                     help='which model to use (rnn, lstm or gru).')
 
     # Parameters to control the training.
+    parser.add_argument('--training', dest='training',
+                        action='store_true',
+                        help='Set to train model.')
+    parser.set_defaults(training=False)
     parser.add_argument('--optim', type=str, default="sgd",
                         help='Optimization algorithm: sgd or adam')
     parser.add_argument('--max_epochs', type=int, default=50,
@@ -166,11 +155,6 @@ def get_common_argparse():
                               'You should avoid setting this to true '
                               'if input is always in full sequence.'))
     parser.set_defaults(varied_len=False)
-    parser.add_argument('--reset_state', dest='reset_state',
-                        action='store_true',
-                        help=('Reset RNN state for each minibatch, '
-                              '(always reset state every epoch).'))
-    parser.set_defaults(reset_state=False)
     parser.add_argument('--sen_independent', dest='sen_independent',
                         action='store_true',
                         help=('Training RNN with padded batch, '
@@ -196,11 +180,16 @@ def get_common_argparse():
                         help=('factor by which learning rate'
                               'is decayed (lr = lr * factor)'))
     # Parameters for outputs and reporting.
-    parser.add_argument('--output_dir', type=str, default='data/ptb/output',
+    parser.add_argument('--experiment_dir', type=str, default='experiments',
                         help=('directory to store final and'
                               ' intermediate results and models.'))
-    parser.add_argument('--log_file_path', type=str, default=None,
-                        help='log file')
+    parser.add_argument('--log_file', type=str, default='experiment.log',
+                        help='log file in experiment_dir')
+    parser.add_argument('--load_config_filepaht', type=str, default=None,
+                        help=('Configuration absolute filepath template.'
+                              'Settings will overrided by current arguments.'))
+    parser.add_argument('--save_config_file', type=str, default='config.json',
+                        help='Configuration file to save in experiment_dir.')
     parser.add_argument('--debug', dest='debug', action='store_true',
                         help='display debug information')
     parser.set_defaults(debug=False)
@@ -208,3 +197,20 @@ def get_common_argparse():
                         default=1000,
                         help='frequency for progress report in training')
     return parser
+
+def update_opt(opt, parser):
+    args = parser.parse_args()
+    if args.load_config_filepaht is not None:
+        with open(args.load_config_filepaht) as ifp:
+            opt.update(LazyBunch.fromDict(json.load(ifp)))
+    opt.update(LazyBunch.fromNamespace(args))
+    return opt
+
+def save_config_file(opt):
+    p = os.path.join(opt.experiment_dir, opt.save_config_file)
+    with open(p, 'w') as ofp:
+        ofp.write(opt.toPrettyJSON())
+
+def ensure_dir(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)

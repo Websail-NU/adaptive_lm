@@ -15,9 +15,5 @@ for D in $DATASETS; do
 done
 echo "[2/2] Preprocessing..."
 for D in $DATASETS; do
-  python ../preprocess/preprocess_text.py "$D" stopwords.txt --bow_vocab_size 2000
+  python ../adative_lm/preprocess/preprocess_text.py "$D"
 done
-# mkdir ptb/preprocess
-# python ../preprocess/preprocess_text.py ptb/ stopwords.txt --bow_vocab_size 2000
-# #cd ../
-# #python -c "import data_utils; data_utils.serialize_corpus('data/ptb/preprocess')"

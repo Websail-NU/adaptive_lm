@@ -28,7 +28,7 @@ import data_utils
 from exp_utils import *
 
 def main(opt):
-    prefix = ['latest_lm', 'latest_dm']
+    prefix = ['latest_lm']
     dataset = ['train', 'valid']
     data, vocab = load_datasets(opt, dataset=dataset)
     logger.info('Loading data completed')
