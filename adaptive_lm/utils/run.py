@@ -21,14 +21,14 @@ import data
 from common import LazyBunch
 from common import get_initial_training_state
 
-def load_model_and_states(output_dir, sess, saver, prefix=["latest"]):
+def load_model_and_states(experiment_dir, sess, saver, prefix=["latest"]):
     logger = logging.getLogger("exp")
     states = {}
     for p in prefix:
         states[p] = get_initial_training_state()
     count = 0
     for pre in prefix:
-        state_path = os.path.join(output_dir, "{}_state.json".format(pre))
+        state_path = os.path.join(experiment_dir, "{}_state.json".format(pre))
         logger.debug('Looking for state at {}'.format(state_path))
         if os.path.exists(state_path):
             with open(state_path) as ifp:
@@ -37,7 +37,7 @@ def load_model_and_states(output_dir, sess, saver, prefix=["latest"]):
         else:
             logger.debug('State file: {} is not found.'.format(state_path))
     if count == len(states):
-        ckpt_path = os.path.join(output_dir, "{}_model.ckpt".format(prefix[0]))
+        ckpt_path = os.path.join(experiment_dir, "{}_model.ckpt".format(prefix[0]))
         logger.debug('Looking for checkpoint at {}'.format(ckpt_path))
         logger.debug('- Restoring model variables...')
         saver.restore(sess, ckpt_path)
@@ -49,18 +49,18 @@ def load_model_and_states(output_dir, sess, saver, prefix=["latest"]):
         logger.info('No state to resume...')
         return states, False
 
-def save_model_and_state(sess, saver, state, output_dir, prefix):
+def save_model_and_state(sess, saver, state, experiment_dir, prefix):
     logger = logging.getLogger("exp")
-    ckpt_path = os.path.join(output_dir,
+    ckpt_path = os.path.join(experiment_dir,
                              "{}_model.ckpt".format(prefix))
-    state_path = os.path.join(output_dir,
+    state_path = os.path.join(experiment_dir,
                               "{}_state.json".format(prefix))
     if sess is not None:
         logger.debug('- Saving model to {}'.format(ckpt_path))
         saver.save(sess, ckpt_path)
     logger.debug('- Saving state to {}'.format(state_path))
     with open(state_path, 'w') as ofp:
-        ofp.write(state.toJSON())
+        ofp.write(state.toPrettyJSON())
 
 def update_lr(opt, state):
     logger = logging.getLogger("exp")
@@ -119,7 +119,7 @@ def scheduled_report(opt, info):
                 info.step + 1, np.exp(info.cost / info.num_words),
                 info.num_words / (time.time() - info.start_time)))
 
-def run_epoch(sess, m, data, opt, train_op=tf.no_op()):
+def run_epoch(sess, m, data, opt, train_op=tf.no_op(), collect_fn=None):
     """ train the model on the given data. """
     logger = logging.getLogger("exp")
     info = LazyBunch(start_time = time.time(), cost = 0.0,
@@ -138,7 +138,10 @@ def run_epoch(sess, m, data, opt, train_op=tf.no_op()):
         info.cost += result.eval_loss * batch.total
         info.num_words += batch.total
         if result.collect is not None:
-            info.collect.append(result.collect)
+            if collect_fn is None:
+                info.collect.append(result.collect)
+            else:
+                collect_fn(result.collect)
         scheduled_report(opt, info)
     info.end_time = time.time()
     info.ppl = np.exp(info.cost / info.num_words)
@@ -159,11 +162,11 @@ def run_post_epoch(new_train_ppl, new_valid_ppl,
             state.best_epoch, state.epoch))
         state.best_val_ppl = new_valid_ppl
         state.best_epoch = state.epoch
-        save_model_and_state(sess, saver, state, opt.output_dir, best_prefix)
+        save_model_and_state(sess, saver, state, opt.experiment_dir, best_prefix)
     else:
         logger.info('- No improvement!')
     done_training = update_lr(opt, state)
-    save_model_and_state(sess, saver, state, opt.output_dir, latest_prefix)
+    save_model_and_state(sess, saver, state, opt.experiment_dir, latest_prefix)
     return done_training
 
 def get_optimizer(lr_var, optim):
@@ -203,21 +206,23 @@ def train_op(loss, opt):
         global_step=global_step)
     return train_op, lr
 
-def create_model(opt, model_scope, model_cls, build_train_fn, build_test_fn):
+def create_model(opt, exp_opt):
     logger = logging.getLogger("exp")
     init_scale = opt.init_scale
     logger.debug(
         '- Creating initializer ({} to {})'.format(-init_scale, init_scale))
     initializer = tf.random_uniform_initializer(-init_scale, init_scale)
     logger.debug('- Creating training model...')
-    with tf.variable_scope(model_scope, reuse=None, initializer=initializer):
-        train_model = build_train_fn(model_cls(opt))
+    with tf.variable_scope(exp_opt.model_scope, reuse=None, initializer=initializer):
+        train_model = exp_opt.build_train_fn(exp_opt.model_cls(
+            opt, helper=exp_opt.model_helper_cls(opt)))
         optim_op, lr_var = train_op(
             train_model.losses.loss, opt)
     logger.debug('- Creating testing model (reuse params)...')
-    with tf.variable_scope(model_scope, reuse=True, initializer=initializer):
-        test_model = build_test_fn(model_cls(LazyBunch(
-                opt, keep_prob=1.0, emb_keep_prob=1.0)))
+    with tf.variable_scope(exp_opt.model_scope, reuse=True, initializer=initializer):
+        test_opt = LazyBunch(opt, keep_prob=1.0, emb_keep_prob=1.0)
+        test_model = exp_opt.build_test_fn(exp_opt.model_cls(
+            test_opt, helper=exp_opt.model_helper_cls(test_opt)))
     logger.debug('Trainable variables:')
     for v in tf.trainable_variables():
         logger.debug("- {} {} {}".format(v.name, v.get_shape(), v.device))

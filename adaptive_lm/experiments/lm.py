@@ -28,10 +28,11 @@ def _train(opt, exp_opt, sess, saver, dataset, state,
         logger.info("- Traning LM with learning rate {}...".format(
             state.learning_rate))
         train_info = run_utils.run_epoch(sess, train_model, dataset['train'],
-                                         opt, train_op=train_op)
+                                         opt, train_op=train_op,
+                                         collect_fn=exp_opt.collect_fn)
         logger.info('- Validating LM...')
         valid_info = run_utils.run_epoch(sess, valid_model, dataset['valid'],
-                                         opt)
+                                         opt, collect_fn=exp_opt.collect_fn)
         logger.info('----------------------------------')
         logger.info('LM post epoch routine...')
         done_training = run_utils.run_post_epoch(
@@ -52,12 +53,11 @@ def run(opt, exp_opt, logger):
     sess_config = common_utils.get_tf_sess_config(opt)
     with tf.Session(config=sess_config) as sess:
         train_model, test_model, train_op, lr_var = run_utils.create_model(
-            opt, 'LM', exp_opt.model_cls,
-            exp_opt.build_train_fn, exp_opt.build_test_fn)
+            opt, exp_opt)
         sess.run(tf.global_variables_initializer())
         saver = tf.train.Saver()
         states, success = run_utils.load_model_and_states(
-            opt.output_dir, sess, saver, [exp_opt.resume])
+            opt.experiment_dir, sess, saver, [exp_opt.resume])
         state = states[exp_opt.resume]
         if not success:
             state.learning_rate = opt.learning_rate
@@ -65,6 +65,6 @@ def run(opt, exp_opt, logger):
             _train(opt, exp_opt, sess, saver, dataset, state,
                    train_model, test_model, train_op, lr_var, logger)
         logger.info('Running LM...')
-        info = run_utils.run_epoch(sess, test_model,
-                                   dataset[exp_opt.run_split], opt)
+        info = run_utils.run_epoch(sess, test_model, dataset[exp_opt.run_split],
+                                   opt, collect_fn=exp_opt.collect_fn)
         return info
