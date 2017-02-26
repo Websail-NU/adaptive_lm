@@ -397,7 +397,12 @@ class SentenceIterator(DataIterator):
                 self.l[i_batch][i_step] = self._find_label(cur_pos + i_step)
                 if self._data[cur_pos + i_step + 1] == self._vocab.eos_id:
                     self._read_tokens[i_batch] = -1
-        return self.x, self.y, self.w, self.l, self.seq_len
+        return self.format_batch()
+
+    def format_batch(self):
+        batch = super(SentenceIterator, self).format_batch()
+        batch.new = self.is_new_sen()
+        return batch
 
     def is_new_sen(self):
         return self._new_sentence_set
@@ -444,14 +449,19 @@ class SenLabelIterator(SentenceIterator):
         self._l_arr[:] = self._padding_id
         x,y,w,l,r = super(SenLabelIterator, self).next_batch()
         if x is None:
-            return None, None, None, None, None
+            return None
         for i in range(self._batch_size):
             for j in range(self._num_steps):
                 if self.l[i][j] is not None:
                     self._l_arr[i, j] = self.l[i][j]
         if self.is_new_sen() and self._num_seeds - 1 > 0:
             self.w[:, 0:self._num_seeds - 1] = 0
-        return self.x, self.y, self.w, self._l_arr, self.seq_len
+        return self.format_batch()
+
+        def format_batch(self):
+            batch = super(SenLabelIterator, self).format_batch()
+            batch.seq_features = self._l_arr
+            return batch
 
 ######################################################
 # Module Functions
