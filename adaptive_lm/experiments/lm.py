@@ -1,0 +1,70 @@
+""" Training script
+
+This module creates and trains recurrent neural network language model.
+
+Example:
+
+Todo:
+    - Support TensorBoard
+
+"""
+import time
+
+import tensorflow as tf
+from adaptive_lm.utils.data import load_datasets
+from adaptive_lm.utils import common as common_utils
+from adaptive_lm.utils import run as run_utils
+
+def _train(opt, exp_opt, sess, saver, dataset, state,
+          train_model, valid_model, train_op, lr_var,
+          logger):
+    logger.info('Start training loop:')
+    logger.debug('\n' + common_utils.SUN_BRO())
+    for epoch in range(state.epoch, opt.max_epochs):
+        epoch_time = time.time()
+        state.epoch = epoch
+        logger.info("========= Start epoch {} =========".format(epoch+1))
+        sess.run(tf.assign(lr_var, state.learning_rate))
+        logger.info("- Traning LM with learning rate {}...".format(
+            state.learning_rate))
+        train_info = run_utils.run_epoch(sess, train_model, dataset['train'],
+                                         opt, train_op=train_op)
+        logger.info('- Validating LM...')
+        valid_info = run_utils.run_epoch(sess, valid_model, dataset['valid'],
+                                         opt)
+        logger.info('----------------------------------')
+        logger.info('LM post epoch routine...')
+        done_training = run_utils.run_post_epoch(
+            train_info.ppl, valid_info.ppl, state, opt,
+            sess=sess, saver=saver,
+            best_prefix=exp_opt.best,
+            latest_prefix=exp_opt.resume)
+        logger.info('- Epoch time: {}s'.format(time.time() - epoch_time))
+        if done_training:
+            break
+    logger.info('Done training at epoch {}'.format(state.epoch + 1))
+
+def run(opt, exp_opt, logger):
+    dataset, vocab = load_datasets(opt, dataset=exp_opt.splits)
+    opt.vocab_size = vocab.vocab_size
+    init_scale = opt.init_scale
+    logger.debug('Staring session...')
+    sess_config = common_utils.get_tf_sess_config(opt)
+    with tf.Session(config=sess_config) as sess:
+        train_model, test_model, train_op, lr_var = run_utils.create_model(
+            opt, 'LM', exp_opt.model_cls,
+            exp_opt.build_train_fn, exp_opt.build_test_fn)
+        sess.run(tf.global_variables_initializer())
+        saver = tf.train.Saver()
+        states, success = run_utils.load_model_and_states(
+            opt.output_dir, sess, saver, [exp_opt.resume])
+        state = states[exp_opt.resume]
+        if not success:
+            state.learning_rate = opt.learning_rate
+        if exp_opt.training:
+            _train(opt, exp_opt, sess, saver, dataset, state,
+                   train_model, test_model, train_op, lr_var, logger)
+        logger.info('Running LM...')
+        info = run_utils.run_epoch(sess, test_model,
+                                   dataset[exp_opt.run_split], opt)
+        return info

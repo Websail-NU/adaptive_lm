@@ -4,10 +4,42 @@ Todo:
     - Colorize log http://plumberjack.blogspot.com/2010/12/colorizing-logging-output-in-terminals.html
 
 """
-
+import neobunch
 import logging
 import argparse
 import collections
+
+class LazyBunch(neobunch.Bunch):
+    """ Just like Bunch,
+        but return None if a requested attribute is not defined.
+    """
+    def __getattr__(self, k):
+        try:
+            return super(LazyBunch, self).__getattr__(k)
+        except AttributeError:
+            return None
+
+    def toPretty(self):
+        keys = self.keys()
+        keys = sorted(keys)
+        o = []
+        for k in keys:
+            o.append("{}:\t{}".format(k, self[k]))
+        return '\n'.join(o)
+
+    @staticmethod
+    def fromNeoBunch(nb):
+        lb = LazyBunch(nb)
+        return lb
+
+    @staticmethod
+    def fromDict(d):
+        return LazyBunch.fromNeoBunch(
+            super(LazyBunch, LazyBunch).fromDict(d))
+
+    @staticmethod
+    def fromNamespace(ns):
+        return LazyBunch.fromDict(vars(ns))
 
 class Bunch(object):
     def __init__(self, **kwds):
@@ -15,17 +47,6 @@ class Bunch(object):
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
-
-    def update_from_dict(self, d):
-        # print(unicode2string(d))
-        self.__dict__.update(d)
-
-    def update_from_ns(self, ns):
-        """Works with argparse"""
-        self.update_from_dict(vars(ns))
-
-    def is_set(self, attr):
-        return attr in self.__dict__
 
     def __str__(self):
         return str(self.__dict__)
@@ -37,6 +58,16 @@ class Bunch(object):
         for k in keys:
             o.append("- {}:\t{}".format(k, self.__dict__[k]))
         return '\n'.join(o)
+
+    def update_from_dict(self, d):
+        self.__dict__.update(d)
+
+    def update_from_ns(self, ns):
+        """Works with argparse"""
+        self.update_from_dict(vars(ns))
+
+    def is_set(self, attr):
+        return attr in self.__dict__
 
     @staticmethod
     def default_model_options():
@@ -94,7 +125,7 @@ def SUN_BRO():
     return '\[T]/ PRAISE THE SUN!\n |_|\n | |'
 
 def get_initial_training_state():
-    return Bunch(
+    return LazyBunch(
         epoch = 0,
         val_ppl = float('inf'),
         best_val_ppl = float('inf'),
@@ -196,7 +227,7 @@ def get_common_argparse():
                         help=('factor by which learning rate'
                               'is decayed (lr = lr * factor)'))
     # Parameters for outputs and reporting.
-    parser.add_argument('--output_dir', type=str, default='data/ptb/output',
+    parser.add_argument('--output_dir', type=str, default='output',
                         help=('directory to store final and'
                               ' intermediate results and models.'))
     parser.add_argument('--log_file_path', type=str, default=None,

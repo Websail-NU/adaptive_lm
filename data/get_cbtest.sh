@@ -7,7 +7,7 @@ tar --warning=no-unknown-keyword -xf CBTest.tgz
 rm CBTest.tgz
 echo "[3/4] Preprocessing text files..."
 mkdir CBTest/preprocess
-python ../preprocess/preprocess_cbtest.py CBTest/ stopwords.txt
+python ../adative_lm/preprocess/preprocess_cbtest.py CBTest/
 echo "[4/4] Serializing data..."
 cd ../
 python -c "import data_utils; data_utils.serialize_corpus('data/CBTest/preprocess')"

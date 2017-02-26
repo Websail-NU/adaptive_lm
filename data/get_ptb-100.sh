@@ -15,9 +15,9 @@ mv ptb-100-control-words.txt ptb-100/
 echo "[3/3] Preprocessing data..."
 for RATE in $DROP_RATES; do
   echo "[3/3], [1/5] $RATE"
-  python ../preprocess/drop_lines.py ptb-100/drop_$RATE/train.txt $RATE ptb-100/ptb-100-control-words.txt ptb-100/tmp
+  python ../adative_lm/preprocess/drop_lines.py ptb-100/drop_$RATE/train.txt $RATE ptb-100/ptb-100-control-words.txt ptb-100/tmp
   mv ptb-100/tmp ptb-100/drop_$RATE/train.txt
-  python ../preprocess/preprocess_text.py ptb-100/drop_$RATE stopwords.txt --bow_vocab_size 2000
+  python ../adative_lm/preprocess/preprocess_text.py ptb-100/drop_$RATE
   mv ptb-100/drop_$RATE/preprocess/vocab.txt ptb-100/drop_$RATE/preprocess/local_vocab.txt
   cp ptb/preprocess/vocab.txt ptb-100/drop_$RATE/preprocess/
   echo -e "<s>\t0" >>  ptb-100/drop_$RATE/preprocess/vocab.txt
