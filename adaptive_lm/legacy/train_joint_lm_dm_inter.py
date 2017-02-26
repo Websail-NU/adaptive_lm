@@ -40,8 +40,7 @@ def main(lm_opt, dm_opt):
     logger.info('Loading data completed')
 
     init_scale = lm_opt.init_scale
-    sess_config =tf.ConfigProto(log_device_placement=False)
-                                # device_count = {'GPU': 0})
+    sess_config = common_utils.get_tf_sess_config(lm_opt)
     logger.info('Starting TF Session...')
 
     with tf.Session(config=sess_config) as sess:
