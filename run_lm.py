@@ -46,7 +46,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     opt = common_utils.update_opt(BasicRNNLM.default_model_options(), parser)
     common_utils.ensure_dir(opt.experiment_dir)
-    common_utils.save_config_file(opt)
+    if opt.save_config_file is not None:
+        common_utils.save_config_file(opt)
     logger = common_utils.get_logger(os.path.join(opt.experiment_dir, opt.log_file))
     if opt.debug:
         logger.setLevel(logging.DEBUG)
