@@ -40,8 +40,6 @@ class BasicRNNLM(rnnlm.RNNLM):
         return inputs, self._initial_state
 
     def forward(self):
-        self._emb, self._input_emb = self.helper.create_input_lookup(
-            self._input)
         self._rnn_output, self._final_state = self.helper.unroll_rnn_cell(
             self._input_emb, self._seq_len,
             self._cell, self._initial_state)
