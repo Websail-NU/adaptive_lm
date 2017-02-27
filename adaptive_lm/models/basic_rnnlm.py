@@ -129,7 +129,7 @@ class DecoderRNNLM(BasicRNNLM):
         self._rnn_output, self._final_state = self.helper.unroll_rnn_cell(
             self._input_emb, self._seq_len,
             self._cell, self._initial_state)
-        flat_output = tf.reshape(tf.concat(self._rnn_output, 1),
+        rnn_output = tf.reshape(tf.concat(self._rnn_output, 1),
                                  [-1, self._opt.state_size])
         self._enc_output = self.helper.create_encoder(
             self._enc_input, self._emb)

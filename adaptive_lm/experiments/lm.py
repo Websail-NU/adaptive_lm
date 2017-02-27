@@ -46,7 +46,8 @@ def _train(opt, exp_opt, sess, saver, dataset, state,
     logger.info('Done training at epoch {}'.format(state.epoch + 1))
 
 def run(opt, exp_opt, logger):
-    dataset, vocab = load_datasets(opt, dataset=exp_opt.splits)
+    dataset, vocab = load_datasets(opt, dataset=exp_opt.splits,
+                                   iterator_type=exp_opt.iterator_cls)
     opt.vocab_size = vocab.vocab_size
     init_scale = opt.init_scale
     logger.debug('Staring session...')

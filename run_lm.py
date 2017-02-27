@@ -23,6 +23,7 @@ training_exp_opt = common_utils.LazyBunch(
     best = 'best_lm',
     splits = ['train', 'valid'],
     run_split = 'valid',
+    iterator_cls = None, # use default option
     model_scope = 'LM',
     model_helper_cls = BasicRNNHelper,
     model_cls = BasicRNNLM,
