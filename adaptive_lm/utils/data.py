@@ -460,7 +460,7 @@ class SenLabelIterator(SentenceIterator):
 
         def format_batch(self):
             batch = super(SenLabelIterator, self).format_batch()
-            batch.seq_features = self._l_arr
+            batch.enc_inputs = self._l_arr
             return batch
 
 ######################################################
