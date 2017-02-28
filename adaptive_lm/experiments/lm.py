@@ -45,8 +45,20 @@ def _train(opt, exp_opt, sess, saver, dataset, state,
             break
     logger.info('Done training at epoch {}'.format(state.epoch + 1))
 
+def _initialize_variables(sess, exp_opt, logger):
+    if exp_opt.init_variables is None or len(exp_opt.init_variables) == 0:
+        return
+    logger.info('Manually initializing variables...')
+    for (pattern, value) in exp_opt.init_variables:
+        variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, pattern)
+        for v in variables:
+            logger.debug("- ({}) Assign name: {}, shape: {}".format(
+                pattern, v.name, v.get_shape()))
+            sess.run(tf.assign(v, value))
+
 def run(opt, exp_opt, logger):
-    dataset, vocab = load_datasets(opt, dataset=exp_opt.splits)
+    dataset, vocab = load_datasets(opt, dataset=exp_opt.splits,
+                                   iterator_type=exp_opt.iterator_cls)
     opt.vocab_size = vocab.vocab_size
     init_scale = opt.init_scale
     logger.debug('Staring session...')
@@ -55,15 +67,18 @@ def run(opt, exp_opt, logger):
         train_model, test_model, train_op, lr_var = run_utils.create_model(
             opt, exp_opt)
         sess.run(tf.global_variables_initializer())
+        _initialize_variables(sess, exp_opt, logger)
         saver = tf.train.Saver()
-        states, success = run_utils.load_model_and_states(
-            opt.experiment_dir, sess, saver, [exp_opt.resume])
-        state = states[exp_opt.resume]
-        if not success:
-            state.learning_rate = opt.learning_rate
         if exp_opt.training:
+            states, success = run_utils.load_model_and_states(
+                opt.experiment_dir, sess, saver, [exp_opt.resume])
+            state = states[exp_opt.resume]
+            if not success:
+                state.learning_rate = opt.learning_rate
             _train(opt, exp_opt, sess, saver, dataset, state,
                    train_model, test_model, train_op, lr_var, logger)
+        _, _ = run_utils.load_model_and_states(
+            opt.experiment_dir, sess, saver, [exp_opt.best])
         logger.info('Running LM...')
         info = run_utils.run_epoch(sess, test_model, dataset[exp_opt.run_split],
                                    opt, collect_fn=exp_opt.collect_fn)

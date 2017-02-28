@@ -447,8 +447,8 @@ class SenLabelIterator(SentenceIterator):
 
     def next_batch(self):
         self._l_arr[:] = self._padding_id
-        x,y,w,l,r = super(SenLabelIterator, self).next_batch()
-        if x is None:
+        batch = super(SenLabelIterator, self).next_batch()
+        if batch is None:
             return None
         for i in range(self._batch_size):
             for j in range(self._num_steps):
@@ -458,10 +458,10 @@ class SenLabelIterator(SentenceIterator):
             self.w[:, 0:self._num_seeds - 1] = 0
         return self.format_batch()
 
-        def format_batch(self):
-            batch = super(SenLabelIterator, self).format_batch()
-            batch.seq_features = self._l_arr
-            return batch
+    def format_batch(self):
+        batch = super(SenLabelIterator, self).format_batch()
+        batch.enc_inputs = self._l_arr
+        return batch
 
 ######################################################
 # Module Functions

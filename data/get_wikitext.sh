@@ -15,5 +15,5 @@ for D in $DATASETS; do
 done
 echo "[2/2] Preprocessing..."
 for D in $DATASETS; do
-  python ../adative_lm/preprocess/preprocess_text.py "$D"
+  python ../adaptive_lm/preprocess/preprocess_text.py "$D"
 done

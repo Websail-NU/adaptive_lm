@@ -15,6 +15,6 @@ tar -xf preprocess.tar.gz
 rm preprocess.tar.gz
 cd ../
 awk -F '\t' '{print $1}' ptb_defs/train.tsv | sort | uniq > ptb_defs/preprocess/train_shortlist.txt
-python ../adative_lm/preprocess/preprocess_defs.py ptb_defs/ --only_train --max_def_len 30
-python ../adative_lm/preprocess/preprocess_defs.py ptb_defs/gcide --only_train --max_def_len 30
-python ../adative_lm/preprocess/preprocess_defs.py ptb_defs/wordnet --only_train --max_def_len 30
+python ../adaptive_lm/preprocess/preprocess_defs.py ptb_defs/ --only_train --max_def_len 30
+python ../adaptive_lm/preprocess/preprocess_defs.py ptb_defs/gcide --only_train --max_def_len 30
+python ../adaptive_lm/preprocess/preprocess_defs.py ptb_defs/wordnet --only_train --max_def_len 30
