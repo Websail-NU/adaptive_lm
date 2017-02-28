@@ -26,8 +26,8 @@ for CORPUS in $CORPORA; do
   sort $CORPUS"/shortlist/tmp.txt" > $CORPUS"/shortlist/shortlist_all.txt"
 done
 echo "[2/2] Preprocessing text files..."
-cd ..
-python ../adative_lm/preprocess/preprocess_defs.py common_defs_v1.2 --max_def_len 30
+cd ../
+python ../adaptive_lm/preprocess/preprocess_defs.py common_defs_v1.2 --max_def_len 30
 for CORPUS in $CORPORA; do
-  python ../adative_lm/preprocess/preprocess_defs.py "common_defs_v1.2/"$CORPUS --max_def_len 30
+  python ../adaptive_lm/preprocess/preprocess_defs.py "common_defs_v1.2/"$CORPUS --max_def_len 30
 done

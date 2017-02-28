@@ -2,6 +2,7 @@ import tensorflow as tf
 import rnnlm
 from adaptive_lm.utils.common import LazyBunch
 from rnnlm_helper import BasicRNNHelper
+from rnnlm_helper import EmbDecoderRNNHelper
 
 class BasicRNNLM(rnnlm.RNNLM):
     """A basic RNNLM."""
@@ -22,7 +23,7 @@ class BasicRNNLM(rnnlm.RNNLM):
         self.helper = helper
         if self.helper is None:
             self.helper = BasicRNNHelper(opt)
-        helper._model = self
+        self.helper._model = self
 
     def batch_size(self):
         return self._opt.batch_size
@@ -43,10 +44,8 @@ class BasicRNNLM(rnnlm.RNNLM):
         self._rnn_output, self._final_state = self.helper.unroll_rnn_cell(
             self._input_emb, self._seq_len,
             self._cell, self._initial_state)
-        flat_output = tf.reshape(tf.concat(self._rnn_output, 1),
-                                 [-1, self._opt.state_size])
         self._logit, self._prob = self.helper.create_output(
-            flat_output, self._emb)
+            self._rnn_output, self._emb)
         self._prob = self._reshape_batch_time(self._prob)
         outputs = LazyBunch(rnn_outputs=self._rnn_output,
                             distributions=self._prob)
@@ -121,7 +120,7 @@ class DecoderRNNLM(BasicRNNLM):
 
     def initialize(self):
         inputs, self._initial_state = super(DecoderRNNLM, self).initialize()
-        self._enc_input = helper.create_enc_input_placeholder()
+        self._enc_input = self.helper.create_enc_input_placeholder()
         inputs.enc_inputs = self._enc_input
         return inputs, self._initial_state
 
@@ -129,15 +128,15 @@ class DecoderRNNLM(BasicRNNLM):
         self._rnn_output, self._final_state = self.helper.unroll_rnn_cell(
             self._input_emb, self._seq_len,
             self._cell, self._initial_state)
-        rnn_output = tf.reshape(tf.concat(self._rnn_output, 1),
-                                 [-1, self._opt.state_size])
         self._enc_output = self.helper.create_encoder(
             self._enc_input, self._emb)
-        # Create attention (combine decoder states and encoder's output)
+        mixed_output, _ = self.helper.create_enc_dec_mixer(
+            self._enc_output, self._rnn_output)
         self._logit, self._prob = self.helper.create_output(
-            flat_output, self._emb)
+            mixed_output, self._emb)
         self._prob = self._reshape_batch_time(self._prob)
         outputs = LazyBunch(rnn_outputs=self._rnn_output,
+                            enc_outputs=self._enc_output,
                             distributions=self._prob)
         return outputs, self._final_state
 
@@ -145,3 +144,14 @@ class DecoderRNNLM(BasicRNNLM):
     def build_full_model_graph(m):
         nodes = BasicRNNLM.build_full_model_graph(m)
         nodes.feed.enc_inputs = nodes.inputs.enc_inputs
+        return nodes
+
+    @staticmethod
+    def default_model_options():
+        opt = BasicRNNLM.default_model_options()
+        opt.emb_size=300
+        opt.state_size=300
+        opt.emb_keep_prob=0.75
+        opt.keep_prob=0.50
+        opt.tie_input_enc_emb = True
+        return opt

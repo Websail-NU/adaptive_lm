@@ -29,10 +29,9 @@ class BasicRNNHelper(object):
         input_emb_var = tf.nn.embedding_lookup(emb_var, input)
         if self.opt.emb_keep_prob < 1.0:
             input_emb_var = tf.nn.dropout(input_emb_var, self.opt.emb_keep_prob)
-        # steps * [bs, emb_size]
+        steps = int(input_emb_var.get_shape()[1])
         input_emb_var = [tf.squeeze(_x, [1])
-                         for _x in tf.split(
-                             input_emb_var, self.opt.num_steps, 1)]
+                         for _x in tf.split(input_emb_var, steps, 1)]
         return emb_var, input_emb_var
 
     def unroll_rnn_cell(self, inputs, seq_len, cell, initial_state):
@@ -44,8 +43,17 @@ class BasicRNNHelper(object):
             cell, inputs, initial_state=initial_state, sequence_length=seq_len)
         return rnn_outputs, final_state
 
-    def create_output(self, flat_rnn_outputs, logit_weights=None):
-        logits = self.create_output_logit(flat_rnn_outputs, logit_weights)
+    def _flat_rnn_outputs(self, rnn_outputs):
+        state_size = int(rnn_outputs[0].get_shape()[-1])
+        return tf.reshape(tf.concat(rnn_outputs, 1),
+                          [-1, state_size]), state_size
+
+    def create_output(self, rnn_outputs, logit_weights=None):
+        if isinstance(rnn_outputs, list):
+            flat_output, _ = self._flat_rnn_outputs(rnn_outputs)
+        else:
+            flat_output = rnn_outputs
+        logits = self.create_output_logit(flat_output, logit_weights)
         probs = tf.nn.softmax(logits)
         return logits, probs
 
@@ -97,14 +105,43 @@ class EmbDecoderRNNHelper(BasicRNNHelper):
             vocab_size = self.opt.get('enc_vocab_size', self.opt.vocab_size)
             emb_size = self.opt.get('enc_emb_size', self.opt.emb_size)
             trainable = self.opt.get(
-                'enc_input_emb_trainable', self.input_emb_trainable)
+                'enc_input_emb_trainable', self.opt.input_emb_trainable)
             enc_emb = tf.get_variable(
                 "enc_emb", [vocab_size, emb_size], trainable=trainable)
-        encoder = tf.nn.embedding_lookup(enc_emb, input)
+        encoder = tf.nn.embedding_lookup(enc_emb, enc_inputs)
         if self.opt.emb_keep_prob < 1.0:
             encoder = tf.nn.dropout(encoder, self.opt.emb_keep_prob)
-        # steps * [bs, emb_size]
-        encoder = [tf.squeeze(_x, [1])
-                         for _x in tf.split(
-                             encoder, self.opt.num_steps, 1)]
+        steps = int(encoder.get_shape()[1])
+        # rearrange to fix rnn output
+        encoder = [tf.squeeze(_x, [1]) for _x in tf.split(encoder, steps, 1)]
         return encoder
+
+    def create_enc_dec_mixer(self, enc_outputs, dec_outputs):
+        """ Combine encoder and decoder into a feature for output
+            Args:
+                enc_outputs: A list of tensors where each tensor is a encoder output at a time step.
+                i.e. [Tensor(batch, hidden),...,Tensor(batch, hidden)]
+                dec_outputs: A list of tensors where each tensor is a decoder output at a time step.
+                i.e. [Tensor(batch, hidden),...,Tensor(batch, hidden)]
+            Returns:
+                (feature tensor(batch*steps, hidden), hidden size)
+        """
+        flat_enc, enc_size = self._flat_rnn_outputs(enc_outputs)
+        flat_dec, dec_size = self._flat_rnn_outputs(dec_outputs)
+        enc_dec = tf.concat([flat_enc, flat_dec], 1)
+        full_size = enc_size + dec_size
+        zr_w = tf.get_variable("att_zr_w", [full_size, full_size])
+        zr_b = tf.get_variable("att_zr_b", [full_size])
+        zr = tf.sigmoid(tf.matmul(enc_dec, zr_w) + zr_b)
+        z = tf.slice(zr, [0, 0], [-1, dec_size],
+                     name="att_z_gate")
+        r = tf.slice(zr, [0, dec_size], [-1, -1],
+                     name="att_r_gate")
+        att_flat_enc = tf.multiply(flat_enc, r)
+        att_enc_dec = tf.concat([att_flat_enc, flat_dec], 1)
+        h_w = tf.get_variable("att_h_w",
+                              [full_size, dec_size])
+        h_b = tf.get_variable("att_h_b", [dec_size])
+        h = tf.tanh(tf.matmul(att_enc_dec, h_w) + h_b)
+        outputs = tf.multiply((1-z), flat_dec) + tf.multiply(z, h)
+        return outputs, dec_size

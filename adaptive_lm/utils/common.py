@@ -192,7 +192,7 @@ def get_common_argparse():
                         help=('factor by which learning rate'
                               'is decayed (lr = lr * factor)'))
     # Parameters for outputs and reporting.
-    parser.add_argument('--experiment_dir', type=str, default='experiments',
+    parser.add_argument('--experiment_dir', type=str, default='experiments/out',
                         help=('directory to store final and'
                               ' intermediate results and models.'))
     parser.add_argument('--log_file', type=str, default='experiment.log',

@@ -21,7 +21,7 @@ It will create a directory `experiments` and save all checkpoints and logs in th
 The same file can also be used for testing. To reuse the configuration file by passing `--load_config_filepaht` and override the configuration by provding new ones. For example
 
 ```
-python run_lm.py --load_config_filepaht experiments/train_config.json --no-training
+python run_lm.py --load_config_filepaht experiments/out/train_config.json --no-training
 ```
 
 ## Extending
