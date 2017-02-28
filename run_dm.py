@@ -37,11 +37,13 @@ if __name__ == '__main__':
     parser.set_defaults(data_dir='data/common_defs_v1.2/wordnet/preprocess/',
                         state_size=300,
                         emb_size=300,
+                        num_layers=2,
                         emb_keep_prob=0.75,
                         keep_prob=0.50,
                         sen_independent=True)
     args = parser.parse_args()
     opt = common_utils.update_opt(DecoderRNNLM.default_model_options(), parser)
+    opt.input_emb_trainable = False
     common_utils.ensure_dir(opt.experiment_dir)
     if opt.save_config_file is not None:
         common_utils.save_config_file(opt)
