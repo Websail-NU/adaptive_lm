@@ -69,14 +69,16 @@ def run(opt, exp_opt, logger):
         sess.run(tf.global_variables_initializer())
         _initialize_variables(sess, exp_opt, logger)
         saver = tf.train.Saver()
-        states, success = run_utils.load_model_and_states(
-            opt.experiment_dir, sess, saver, [exp_opt.resume])
-        state = states[exp_opt.resume]
-        if not success:
-            state.learning_rate = opt.learning_rate
         if exp_opt.training:
+            states, success = run_utils.load_model_and_states(
+                opt.experiment_dir, sess, saver, [exp_opt.resume])
+            state = states[exp_opt.resume]
+            if not success:
+                state.learning_rate = opt.learning_rate
             _train(opt, exp_opt, sess, saver, dataset, state,
                    train_model, test_model, train_op, lr_var, logger)
+        _, _ = run_utils.load_model_and_states(
+            opt.experiment_dir, sess, saver, [exp_opt.best])
         logger.info('Running LM...')
         info = run_utils.run_epoch(sess, test_model, dataset[exp_opt.run_split],
                                    opt, collect_fn=exp_opt.collect_fn)
