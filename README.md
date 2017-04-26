@@ -1,3 +1,5 @@
+*Deprecated project, moved to [seqmodel](https://github.com/Websail-NU/seqmodel)*
+
 This repository is an implementation an RNNLM using Tensorflow (r1.0).
 
 
